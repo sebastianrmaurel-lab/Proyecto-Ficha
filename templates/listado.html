@@ -24,13 +24,12 @@
   <table class="tabla-actos">
     <thead>
       <tr>
-        <th>N°</th><th></th><th>Nombre</th><th>RUT</th><th>Cargo actual</th><th>Unidad</th><th>Documentos</th>
+        <th></th><th>Nombre</th><th>RUT</th><th>Cargo actual</th><th>Unidad</th><th>Documentos</th>
       </tr>
     </thead>
     <tbody>
       {% for f in fichas %}
       <tr onclick="window.location.href='{{ url_for('ficha_detalle', fid=f.id) }}'">
-        <td style="font-family:var(--font-mono);color:var(--ink-soft);font-size:.78rem">{{ f.numero_ficha or '—' }}</td>
         <td style="width:1%">
           <div class="avatar-mini">
             {% if f.foto %}<img src="{{ url_for('static', filename='uploads/'+f.foto) }}" alt="" style="width:34px;height:34px;border-radius:50%;object-fit:cover">
@@ -44,7 +43,7 @@
         <td><span class="badge-conteo">{{ f.total_docs }}</span></td>
       </tr>
       {% else %}
-      <tr class="fila-vacia"><td colspan="7">{% if q %}Sin resultados para "{{ q }}".{% else %}No hay hojas de vida registradas.{% endif %}</td></tr>
+      <tr class="fila-vacia"><td colspan="6">{% if q %}Sin resultados para "{{ q }}".{% else %}No hay hojas de vida registradas.{% endif %}</td></tr>
       {% endfor %}
     </tbody>
   </table>

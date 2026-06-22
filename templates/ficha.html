@@ -5,12 +5,9 @@
 <a class="boton boton-fantasma" href="{{ url_for('fichas_listado') }}" style="margin-bottom:14px">← Volver</a>
 
 {# ══ ENCABEZADO ══ #}
-<div class="encabezado-hv" style="background:var(--primary);color:#fff;border-radius:var(--radius) var(--radius) 0 0;padding:14px 22px;display:flex;justify-content:space-between;align-items:center">
-  <div>
-    <p style="font-family:var(--font-display);font-size:1.1rem;font-weight:700;margin:0">{{ ficha.nombre if ficha else 'Nueva Hoja de Vida' }}</p>
-    <p style="font-size:.78rem;opacity:.75;margin:2px 0 0">Hoja de Vida de Personal</p>
-  </div>
-  {% if ficha %}<span class="numero-ficha">FICHA N.° {{ ficha.numero_ficha or ficha.id }}</span>{% endif %}
+<div class="encabezado-hv" style="background:var(--primary);color:#fff;border-radius:var(--radius) var(--radius) 0 0;padding:14px 22px;text-align:center">
+  <p style="font-family:var(--font-display);font-size:1.1rem;font-weight:700;margin:0">{{ ficha.nombre if ficha else 'Nueva Hoja de Vida' }}</p>
+  <p style="font-size:.78rem;opacity:.75;margin:2px 0 0">Hoja de Vida de Personal</p>
 </div>
 
 {# ══ FORM DATOS PERSONALES ══ #}
