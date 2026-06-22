@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block titulo %}Dashboard{% endblock %}
+
+{% block contenido %}
+  <div class="timbre-modulo">
+    <div>
+      <p class="titulo-principal">Dashboard</p>
+      <p class="subtitulo">Resumen general del sistema de fichas</p>
+    </div>
+  </div>
+
+  <div class="rejilla-kpis">
+    <div class="tarjeta-kpi">
+      <p class="kpi-valor">{{ total_fichas }}</p>
+      <p class="kpi-etiqueta">Fichas activas</p>
+    </div>
+    <div class="tarjeta-kpi">
+      <p class="kpi-valor">{{ total_actos }}</p>
+      <p class="kpi-etiqueta">Actos administrativos</p>
+    </div>
+    <div class="tarjeta-kpi">
+      <p class="kpi-valor">{{ total_familiares }}</p>
+      <p class="kpi-etiqueta">Asignaciones familiares</p>
+    </div>
+    <div class="tarjeta-kpi">
+      <p class="kpi-valor">{{ en_papelera }}</p>
+      <p class="kpi-etiqueta">En la papelera</p>
+      <a class="enlace-kpi" href="{{ url_for('fichas_papelera') }}">Ver papelera →</a>
+    </div>
+  </div>
+
+  {% if meses_resumen %}
+    <div class="seccion-ficha" style="margin-top:8px;">
+      <p class="eyebrow">Carpetas creadas por mes</p>
+      <div class="tabla-actos-contenedor" style="max-height:none;">
+        <table class="tabla-actos">
+          <thead>
+            <tr>
+              <th>Glosa</th>
+              {% for mes in meses_resumen %}<th class="numero">{{ mes.label }}</th>{% endfor %}
+              <th class="numero">Total general</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Carpeta Funcionario</td>
+              {% for mes in meses_resumen %}<td class="numero">{{ mes.total }}</td>{% endfor %}
+              <td class="numero">{{ total_general_carpetas }}</td>
+            </tr>
+            <tr class="fila-total">
+              <td>Total general</td>
+              {% for mes in meses_resumen %}<td class="numero">{{ mes.total }}</td>{% endfor %}
+              <td class="numero">{{ total_general_carpetas }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endif %}
+{% endblock %}
