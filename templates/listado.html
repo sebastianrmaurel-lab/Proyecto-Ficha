@@ -9,6 +9,7 @@
   <div class="acciones-pagina">
     <a class="boton boton-secundario" href="{{ url_for('fichas_exportar') }}">Exportar Excel</a>
     <a class="boton boton-secundario" href="{{ url_for('fichas_importar_get') }}">Importar Hoja de Vida</a>
+    <a class="boton boton-secundario" href="{{ url_for('importar_secciones_get') }}">Importar Actos</a>
     <a class="boton boton-fantasma" href="{{ url_for('fichas_papelera') }}">Papelera{% if en_papelera %} ({{ en_papelera }}){% endif %}</a>
     <a class="boton boton-primario" href="{{ url_for('ficha_nueva') }}">+ Nueva hoja de vida</a>
   </div>

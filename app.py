@@ -541,24 +541,6 @@ def init_db():
         FOREIGN KEY (documento_id) REFERENCES documentos_hv(id) ON DELETE CASCADE
     )''')
 
-    db.execute('''CREATE TABLE IF NOT EXISTS historial_institucional (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        ficha_id INTEGER NOT NULL,
-        cargo TEXT, unidad TEXT, departamento TEXT,
-        tipo_contrato TEXT, estamento TEXT, grado TEXT, jornada TEXT,
-        desde TEXT, hasta TEXT, observaciones TEXT,
-        fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (ficha_id) REFERENCES fichas(id) ON DELETE CASCADE
-    )''')
-
-    db.execute('''CREATE TABLE IF NOT EXISTS archivos_historial (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        historial_id INTEGER NOT NULL,
-        nombre_archivo TEXT NOT NULL, nombre_original TEXT,
-        fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (historial_id) REFERENCES historial_institucional(id) ON DELETE CASCADE
-    )''')
-
     db.execute('''CREATE TABLE IF NOT EXISTS usuarios (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL,
@@ -758,7 +740,7 @@ def ficha_nueva():
         return redirect(url_for('ficha_detalle', fid=cur.lastrowid))
 
     cats = _cargar_catalogos(db)
-    return render_template('ficha.html', ficha=None, documentos={}, historial=[],
+    return render_template('ficha.html', ficha=None, documentos={},
                            secciones_config=SECCIONES_CONFIG, cats=cats,
                            secciones_json=json.dumps({k:v for k,v in SECCIONES_CONFIG.items()}))
 
@@ -791,20 +773,8 @@ def ficha_detalle(fid):
         } for a in archs])
         documentos[sec].append(d)
 
-    # historial institucional
-    historial = []
-    for row in db.execute('SELECT * FROM historial_institucional WHERE ficha_id=? ORDER BY desde DESC, id DESC',(fid,)):
-        h = dict(row)
-        archs = db.execute('SELECT * FROM archivos_historial WHERE historial_id=? ORDER BY id',(h['id'],)).fetchall()
-        h['archivos'] = archs
-        h['archivos_json'] = json.dumps([{
-            'id':a['id'],'nombre':a['nombre_original'] or a['nombre_archivo'],
-            'url':url_for('static', filename='uploads/'+a['nombre_archivo'])
-        } for a in archs])
-        historial.append(h)
-
     cats = _cargar_catalogos(db)
-    return render_template('ficha.html', ficha=ficha, documentos=documentos, historial=historial,
+    return render_template('ficha.html', ficha=ficha, documentos=documentos,
                            secciones_config=SECCIONES_CONFIG, cats=cats,
                            secciones_json=json.dumps({k:{'nombre':v['nombre'],'campos':v['campos']} for k,v in SECCIONES_CONFIG.items()}))
 
@@ -921,71 +891,6 @@ def doc_archivo_eliminar(fid, seccion, doc_id, arch_id):
     if a:
         borrar_archivo(a['nombre_archivo'])
         db.execute('DELETE FROM archivos_documentos WHERE id=?',(arch_id,))
-        db.commit(); flash('Archivo eliminado.','success')
-    return redirect(url_for('ficha_detalle', fid=fid))
-
-# ─────────────────────────────────────────────
-#  HISTORIAL INSTITUCIONAL
-# ─────────────────────────────────────────────
-@app.route('/fichas/<int:fid>/historial/guardar', methods=['POST'])
-@login_required
-def historial_guardar(fid):
-    g = lambda k: request.form.get(k,'').strip()
-    d = {k:g(k) for k in ['cargo','unidad','departamento','tipo_contrato','estamento','grado','jornada','desde','hasta','observaciones']}
-    if not d['cargo']:
-        flash('El cargo es obligatorio.','error'); return redirect(url_for('ficha_detalle', fid=fid))
-    if not fechas_ok(d['desde'],d['hasta']):
-        flash('Fecha Hasta no puede ser anterior a Desde.','error'); return redirect(url_for('ficha_detalle', fid=fid))
-    db = get_db()
-    cur = db.execute('''INSERT INTO historial_institucional (ficha_id,cargo,unidad,departamento,
-                        tipo_contrato,estamento,grado,jornada,desde,hasta,observaciones)
-                        VALUES(?,?,?,?,?,?,?,?,?,?,?)''',
-                     (fid,d['cargo'],d['unidad'],d['departamento'],d['tipo_contrato'],
-                      d['estamento'],d['grado'],d['jornada'],d['desde'],d['hasta'],d['observaciones']))
-    hid = cur.lastrowid
-    for nombre, original in guardar_archivos('archivos', EXT_DOC):
-        db.execute('INSERT INTO archivos_historial (historial_id,nombre_archivo,nombre_original) VALUES(?,?,?)',(hid,nombre,original))
-    db.commit(); flash('Historial guardado.','success')
-    return redirect(url_for('ficha_detalle', fid=fid))
-
-@app.route('/fichas/<int:fid>/historial/modificar', methods=['POST'])
-@login_required
-def historial_modificar(fid):
-    hid = request.form.get('historial_id','').strip()
-    if not hid: flash('Selecciona un registro.','error'); return redirect(url_for('ficha_detalle', fid=fid))
-    g = lambda k: request.form.get(k,'').strip()
-    d = {k:g(k) for k in ['cargo','unidad','departamento','tipo_contrato','estamento','grado','jornada','desde','hasta','observaciones']}
-    db = get_db()
-    db.execute('''UPDATE historial_institucional SET cargo=?,unidad=?,departamento=?,tipo_contrato=?,
-                  estamento=?,grado=?,jornada=?,desde=?,hasta=?,observaciones=?
-                  WHERE id=? AND ficha_id=?''',
-               (d['cargo'],d['unidad'],d['departamento'],d['tipo_contrato'],d['estamento'],
-                d['grado'],d['jornada'],d['desde'],d['hasta'],d['observaciones'],hid,fid))
-    for nombre, original in guardar_archivos('archivos', EXT_DOC):
-        db.execute('INSERT INTO archivos_historial (historial_id,nombre_archivo,nombre_original) VALUES(?,?,?)',(hid,nombre,original))
-    db.commit(); flash('Historial actualizado.','success')
-    return redirect(url_for('ficha_detalle', fid=fid))
-
-@app.route('/fichas/<int:fid>/historial/eliminar', methods=['POST'])
-@login_required
-def historial_eliminar(fid):
-    hid = request.form.get('historial_id','').strip()
-    if hid:
-        db = get_db()
-        for a in db.execute('SELECT nombre_archivo FROM archivos_historial WHERE historial_id=?',(hid,)):
-            borrar_archivo(a['nombre_archivo'])
-        db.execute('DELETE FROM historial_institucional WHERE id=? AND ficha_id=?',(hid,fid))
-        db.commit(); flash('Historial eliminado.','success')
-    return redirect(url_for('ficha_detalle', fid=fid))
-
-@app.route('/fichas/<int:fid>/historial/<int:hid>/archivos/<int:aid>/eliminar', methods=['POST'])
-@login_required
-def historial_archivo_eliminar(fid, hid, aid):
-    db = get_db()
-    a = db.execute('SELECT * FROM archivos_historial WHERE id=? AND historial_id=?',(aid,hid)).fetchone()
-    if a:
-        borrar_archivo(a['nombre_archivo'])
-        db.execute('DELETE FROM archivos_historial WHERE id=?',(aid,))
         db.commit(); flash('Archivo eliminado.','success')
     return redirect(url_for('ficha_detalle', fid=fid))
 
@@ -1126,6 +1031,138 @@ def fichas_confirmar_importacion():
     msg = f'{creadas} hoja(s) de vida importada(s) correctamente.'
     if omitidas: msg += f' Omitidas: {"; ".join(omitidas)}'
     flash(msg, 'error' if omitidas else 'success')
+    return redirect(url_for('fichas_listado'))
+
+
+
+# ─────────────────────────────────────────────
+#  IMPORTAR SECCIONES DESDE EXCEL
+# ─────────────────────────────────────────────
+
+SECCIONES_EXCEL = {
+    'Designaciones':               ('designaciones',          ['fecha_desde','fecha_hasta','calidad','horas'],                                    {'tipo_documento':'Tipo Documento','numero_documento':'N° Documento','fecha_documento':'Fecha Documento','servicio_documento':'Servicio','estado_tramite':'Estado Trámite','fecha_desde':'Fecha Desde','fecha_hasta':'Fecha Hasta','calidad':'Calidad','horas':'Horas'}),
+    'Cese de Funciones':           ('cese_funciones',         ['tipo_cese','causal_cese','horas_cesadas','fecha_desde'],                          {'tipo_documento':'Tipo Documento','numero_documento':'N° Documento','fecha_documento':'Fecha Documento','servicio_documento':'Servicio','estado_tramite':'Estado Trámite','tipo_cese':'Tipo Cese','causal_cese':'Causal del Cese','horas_cesadas':'Horas Cesadas','fecha_desde':'Fecha Desde'}),
+    'Responsabilidad Administrativa':('responsabilidad_administrativa',['materia','conclusion'],                                                  {'tipo_documento':'Tipo Documento','numero_documento':'N° Documento','fecha_documento':'Fecha Documento','servicio_documento':'Servicio','estado_tramite':'Estado Trámite','materia':'Materia','conclusion':'Conclusión'}),
+    'Inhabilidades':               ('inhabilidades',          ['materia','fecha_desde','tiempo_inhabilidad'],                                     {'tipo_documento':'Tipo Documento','numero_documento':'N° Documento','fecha_documento':'Fecha Documento','servicio_documento':'Servicio','estado_tramite':'Estado Trámite','materia':'Materia','fecha_desde':'Fecha Desde','tiempo_inhabilidad':'Tiempo Inhabilidad'}),
+    'Estudios':                    ('estudios',               ['nivel_estudio','titulo_carrera','fecha_otorgamiento','fecha_convalidacion','institucion'],{'tipo_documento':'Tipo Documento','numero_documento':'N° Documento','fecha_documento':'Fecha Documento','servicio_documento':'Servicio','estado_tramite':'Estado Trámite','nivel_estudio':'Nivel de Estudio','titulo_carrera':'Título / Carrera','fecha_otorgamiento':'Fecha Otorgamiento','fecha_convalidacion':'Fecha Convalidación','institucion':'Institución'}),
+    'Contrato a Honorarios':       ('contrato_honorarios',    ['fecha_desde','labor','modalidad','fecha_hasta'],                                  {'tipo_documento':'Tipo Documento','numero_documento':'N° Documento','fecha_documento':'Fecha Documento','servicio_documento':'Servicio','estado_tramite':'Estado Trámite','fecha_desde':'Fecha Desde','labor':'Labor','modalidad':'Modalidad','fecha_hasta':'Fecha Hasta'}),
+    'Licencias Médicas':           ('licencias_medicas',      ['fecha_desde','fecha_hasta','dias'],                                               {'tipo_documento':'Tipo Documento','numero_documento':'N° Documento','fecha_documento':'Fecha Documento','servicio_documento':'Servicio','estado_tramite':'Estado Trámite','fecha_desde':'Fecha Desde','fecha_hasta':'Fecha Hasta','dias':'Días'}),
+    'Permisos y Feriados':         ('permisos_feriados',      ['fecha_desde','fecha_hasta','dias','tipo_informacion'],                            {'tipo_documento':'Tipo Documento','numero_documento':'N° Documento','fecha_documento':'Fecha Documento','servicio_documento':'Servicio','estado_tramite':'Estado Trámite','fecha_desde':'Fecha Desde','fecha_hasta':'Fecha Hasta','dias':'Días','tipo_informacion':'Tipo Información'}),
+    'Comisiones y Becas':          ('comisiones_becas',       ['materia','fecha_desde','fecha_hasta'],                                            {'tipo_documento':'Tipo Documento','numero_documento':'N° Documento','fecha_documento':'Fecha Documento','servicio_documento':'Servicio','estado_tramite':'Estado Trámite','materia':'Materia','fecha_desde':'Fecha Desde','fecha_hasta':'Fecha Hasta'}),
+    'Cargas Familiares':           ('cargas_familiares',      ['tipo_carga','nombre_carga','fecha_hasta'],                                        {'tipo_documento':'Tipo Documento','numero_documento':'N° Documento','fecha_documento':'Fecha Documento','servicio_documento':'Servicio','estado_tramite':'Estado Trámite','tipo_carga':'Tipo Carga','nombre_carga':'Nombre','fecha_hasta':'Fecha Hasta'}),
+    'Calificación':                ('calificacion',           ['lista','puntaje','fecha_inicio','fecha_termino'],                                 {'tipo_documento':'Tipo Documento','numero_documento':'N° Documento','fecha_documento':'Fecha Documento','servicio_documento':'Servicio','estado_tramite':'Estado Trámite','lista':'Lista','puntaje':'Puntaje','fecha_inicio':'Fecha Inicio','fecha_termino':'Fecha Término'}),
+    'Destinaciones':               ('destinaciones',          ['materia_ingreso','fecha_desde'],                                                  {'tipo_documento':'Tipo Documento','numero_documento':'N° Documento','fecha_documento':'Fecha Documento','servicio_documento':'Servicio','estado_tramite':'Estado Trámite','materia_ingreso':'Materia Ingreso','fecha_desde':'Fecha Desde'}),
+    'Ceses':                       ('ceses',                  ['tipo_cese','motivo','fecha_termino'],                                             {'tipo_documento':'Tipo Documento','numero_documento':'N° Documento','fecha_documento':'Fecha Documento','servicio_documento':'Servicio','estado_tramite':'Estado Trámite','tipo_cese':'Tipo','motivo':'Motivo','fecha_termino':'Fecha Término'}),
+    'Anotaciones':                 ('anotaciones',            ['tipo_anotacion','fecha_anotacion','run_responsable','nombre_responsable'],         {'tipo_documento':'Tipo Documento','numero_documento':'N° Documento','fecha_documento':'Fecha Documento','servicio_documento':'Servicio','estado_tramite':'Estado Trámite','tipo_anotacion':'Tipo','fecha_anotacion':'Fecha','run_responsable':'Run Responsable','nombre_responsable':'Nombre Responsable'}),
+    'Declaraciones de Patrimonio': ('declaraciones_patrimonio',['materia_declaracion','fecha_declaracion','fecha_proxima'],                        {'tipo_documento':'Tipo Documento','numero_documento':'N° Documento','fecha_documento':'Fecha Documento','servicio_documento':'Servicio','estado_tramite':'Estado Trámite','materia_declaracion':'Materia Declaración','fecha_declaracion':'Fecha Declaración','fecha_proxima':'Fecha Próxima'}),
+    'Modifica Rectifica':          ('modifica_rectifica',     ['materia_documento','modifica_a','documento_n','materia_relacionada'],              {'tipo_documento':'Tipo Documento','numero_documento':'N° Documento','fecha_documento':'Fecha Documento','servicio_documento':'Servicio','estado_tramite':'Estado Trámite','materia_documento':'Materia','modifica_a':'Modifica a','documento_n':'Documento N','materia_relacionada':'Materia Relacionada'}),
+}
+
+
+def _leer_secciones_excel(stream):
+    from openpyxl import load_workbook
+    wb = load_workbook(stream, data_only=True)
+
+    def s(v):
+        if v is None: return ''
+        if hasattr(v, 'strftime'): return v.strftime('%Y-%m-%d')
+        return str(v).strip()
+
+    resultado = {}
+    for nombre_hoja in wb.sheetnames:
+        cfg = None
+        for k, v in SECCIONES_EXCEL.items():
+            if k.lower() in nombre_hoja.lower() or nombre_hoja.lower() in k.lower():
+                cfg = v; break
+        if not cfg: continue
+
+        seccion_id, campos_extra, cols = cfg
+        ws = wb[nombre_hoja]
+        enc = [str(c.value).strip() if c.value else '' for c in next(ws.iter_rows(min_row=1, max_row=1))]
+
+        def col(fila, label):
+            for i, e in enumerate(enc):
+                if e and label.lower() in e.lower(): return fila[i]
+            return None
+
+        filas = []
+        for fila in ws.iter_rows(min_row=2, values_only=True):
+            if not any(c is not None for c in fila): continue
+            rut = s(col(fila, 'RUT')) or s(col(fila, 'Run'))
+            if not rut: continue
+            registro = {'rut': rut, 'seccion': seccion_id}
+            for campo, label in cols.items():
+                registro[campo] = s(col(fila, label))
+            registro['_extra_keys'] = campos_extra
+            filas.append(registro)
+
+        if filas:
+            resultado[nombre_hoja] = {'seccion_id': seccion_id, 'filas': filas}
+
+    return resultado
+
+
+@app.route('/fichas/importar-secciones', methods=['GET'])
+@login_required
+def importar_secciones_get():
+    return render_template('importar_secciones.html', resultado=None, error=None)
+
+
+@app.route('/fichas/importar-secciones', methods=['POST'])
+@login_required
+def importar_secciones_post():
+    archivo = request.files.get('excel')
+    if not archivo or not archivo.filename:
+        return render_template('importar_secciones.html', resultado=None, error='Selecciona un archivo.')
+    if not archivo.filename.lower().endswith(('.xlsx', '.xls')):
+        return render_template('importar_secciones.html', resultado=None, error='Solo .xlsx o .xls.')
+    try:
+        resultado = _leer_secciones_excel(archivo.stream)
+        if not resultado:
+            return render_template('importar_secciones.html', resultado=None,
+                                   error='No se encontraron hojas reconocidas. Verifica que los nombres de las hojas coincidan con las secciones (ej: Designaciones, Estudios, Licencias Médicas...).')
+        return render_template('importar_secciones.html', resultado=resultado, error=None)
+    except Exception as e:
+        return render_template('importar_secciones.html', resultado=None, error=f'Error leyendo el archivo: {e}')
+
+
+@app.route('/fichas/confirmar-importacion-secciones', methods=['POST'])
+@login_required
+def confirmar_importacion_secciones():
+    db = get_db()
+    total = 0
+    no_encontrados = []
+    cantidad = int(request.form.get('cantidad_registros', 0))
+
+    for i in range(cantidad):
+        rut     = request.form.get(f'r_{i}_rut', '').strip()
+        seccion = request.form.get(f'r_{i}_seccion', '').strip()
+        if not rut or not seccion: continue
+
+        ficha = db.execute('SELECT id FROM fichas WHERE rut=?', (rut,)).fetchone()
+        if not ficha:
+            if rut not in no_encontrados:
+                no_encontrados.append(rut)
+            continue
+
+        base_keys = ['tipo_documento','numero_documento','fecha_documento','servicio_documento','estado_tramite']
+        base  = {k: request.form.get(f'r_{i}_{k}', '') for k in base_keys}
+        extra = json.loads(request.form.get(f'r_{i}_extra', '{}'))
+
+        db.execute("""INSERT INTO documentos_hv
+            (ficha_id, seccion, tipo_documento, numero_documento, fecha_documento,
+             servicio_documento, estado_tramite, datos_extra)
+            VALUES (?,?,?,?,?,?,?,?)""",
+            (ficha['id'], seccion, base['tipo_documento'], base['numero_documento'],
+             base['fecha_documento'], base['servicio_documento'],
+             base['estado_tramite'], json.dumps(extra)))
+        total += 1
+
+    db.commit()
+    msg = f'{total} registro(s) importado(s) correctamente.'
+    if no_encontrados:
+        msg += f' RUTs no encontrados en el sistema: {", ".join(no_encontrados)}'
+    flash(msg, 'error' if no_encontrados else 'success')
     return redirect(url_for('fichas_listado'))
 
 # ─────────────────────────────────────────────

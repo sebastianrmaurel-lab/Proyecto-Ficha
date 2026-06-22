@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block titulo %}Importar Actos Administrativos{% endblock %}
+{% block contenido %}
+
+<a class="boton boton-fantasma" href="{{ url_for('fichas_listado') }}" style="margin-bottom:16px">← Volver</a>
+
+<div class="timbre-modulo">
+  <div>
+    <p class="titulo-principal">Importar Actos Administrativos</p>
+    <p class="subtitulo">Importa todas las secciones de la hoja de vida desde un Excel con múltiples hojas</p>
+  </div>
+</div>
+
+{% if error %}
+  <div class="mensaje error" style="margin-bottom:16px">{{ error }}</div>
+{% endif %}
+
+{% if not resultado %}
+  <div class="seccion-ficha" style="max-width:620px">
+    <p class="eyebrow">Formato del archivo</p>
+    <p style="font-size:.85rem;color:var(--ink-soft);margin:0 0 14px;line-height:1.7">
+      El Excel debe tener <strong>una hoja por sección</strong>, con el nombre de la sección como nombre de la hoja.<br>
+      La <strong>primera columna debe ser el RUT</strong> de la persona — así el sistema sabe a qué ficha asignar cada registro.<br>
+      Descarga la plantilla de abajo para ver el formato exacto de cada sección.
+    </p>
+
+    <div style="background:var(--surface-muted);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:18px;font-size:.82rem">
+      <p style="font-weight:600;margin:0 0 8px">Nombres de hojas reconocidos:</p>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        {% for nombre in ['Designaciones','Cese de Funciones','Responsabilidad Administrativa','Inhabilidades','Estudios','Contrato a Honorarios','Licencias Médicas','Permisos y Feriados','Comisiones y Becas','Cargas Familiares','Calificación','Destinaciones','Ceses','Anotaciones','Declaraciones de Patrimonio','Modifica Rectifica'] %}
+        <span style="background:var(--primary-soft);color:var(--primary);font-size:.72rem;font-weight:600;padding:2px 8px;border-radius:4px;font-family:var(--font-mono)">{{ nombre }}</span>
+        {% endfor %}
+      </div>
+    </div>
+
+    <form method="post" enctype="multipart/form-data">
+      <div class="campo" style="margin-bottom:14px">
+        <label style="font-size:.78rem;font-weight:600;color:var(--ink-soft)">Archivo Excel (.xlsx)</label>
+        <input type="file" name="excel" accept=".xlsx,.xls" required style="margin-top:6px">
+      </div>
+      <button class="boton boton-primario" type="submit">Leer archivo →</button>
+    </form>
+  </div>
+
+{% else %}
+  {# Previsualización #}
+  {% set total_registros = resultado.values()|sum(attribute='filas')|list|length %}
+
+  <div class="seccion-ficha" style="margin-bottom:16px">
+    <p class="eyebrow">Previsualización</p>
+    <p style="font-size:.85rem;color:var(--ink-soft);margin:0">
+      Se encontraron <strong>{{ resultado|length }}</strong> hoja(s) con
+      <strong>{{ resultado.values()|map(attribute='filas')|map('length')|sum }}</strong> registro(s) en total.
+      Revisa y confirma para importarlos.
+    </p>
+  </div>
+
+  <form method="post" action="{{ url_for('confirmar_importacion_secciones') }}">
+    {% set ns = namespace(idx=0) %}
+    {% for nombre_hoja, data in resultado.items() %}
+    <details class="seccion" open style="margin-bottom:12px">
+      <summary>
+        <span>{{ nombre_hoja }}</span>
+        <span class="sum-right">
+          <span class="badge-num">{{ data.filas|length }}</span>
+        </span>
+      </summary>
+      <div class="scroll-tabla">
+        <table class="tabla-hv" style="font-size:.78rem">
+          <thead>
+            <tr>
+              <th>#</th><th>RUT</th>
+              <th>Tipo Doc.</th><th>N° Doc.</th><th>Fecha Doc.</th>
+              <th>Servicio</th><th>Estado</th><th>Campos extra</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for fila in data.filas %}
+            {% set i = ns.idx %}
+            <input type="hidden" name="r_{{ i }}_rut"               value="{{ fila.rut }}">
+            <input type="hidden" name="r_{{ i }}_seccion"            value="{{ data.seccion_id }}">
+            <input type="hidden" name="r_{{ i }}_tipo_documento"     value="{{ fila.get('tipo_documento','') }}">
+            <input type="hidden" name="r_{{ i }}_numero_documento"   value="{{ fila.get('numero_documento','') }}">
+            <input type="hidden" name="r_{{ i }}_fecha_documento"    value="{{ fila.get('fecha_documento','') }}">
+            <input type="hidden" name="r_{{ i }}_servicio_documento" value="{{ fila.get('servicio_documento','') }}">
+            <input type="hidden" name="r_{{ i }}_estado_tramite"     value="{{ fila.get('estado_tramite','') }}">
+            <input type="hidden" name="r_{{ i }}_extra"              value="{{ fila | tojson | replace('"', '&quot;') }}">
+            <tr style="cursor:default">
+              <td>{{ loop.index }}</td>
+              <td style="font-family:var(--font-mono)">{{ fila.rut }}</td>
+              <td>{{ fila.get('tipo_documento','') }}</td>
+              <td>{{ fila.get('numero_documento','') }}</td>
+              <td>{{ fila.get('fecha_documento','') }}</td>
+              <td>{{ fila.get('servicio_documento','') }}</td>
+              <td>{{ fila.get('estado_tramite','') }}</td>
+              <td style="font-size:.72rem;color:var(--ink-soft)">
+                {% for k in fila._extra_keys if fila.get(k) %}{{ fila[k] }}{% if not loop.last %} · {% endif %}{% endfor %}
+              </td>
+            </tr>
+            {% set ns.idx = ns.idx + 1 %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </details>
+    {% endfor %}
+
+    <input type="hidden" name="cantidad_registros" value="{{ ns.idx }}">
+
+    <div style="display:flex;gap:10px;padding:14px 0;border-top:1px solid var(--border);position:sticky;bottom:0;background:var(--bg)">
+      <button class="boton boton-primario" type="submit">Confirmar e importar {{ resultado.values()|map(attribute='filas')|map('length')|sum }} registro(s)</button>
+      <a class="boton boton-fantasma" href="{{ url_for('importar_secciones_get') }}">← Cargar otro archivo</a>
+      <a class="boton boton-fantasma" href="{{ url_for('fichas_listado') }}">Cancelar</a>
+    </div>
+  </form>
+{% endif %}
+
+{% endblock %}

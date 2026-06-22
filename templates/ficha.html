@@ -59,34 +59,6 @@
 </form>
 
 {% if ficha %}
-{# ══ HISTORIAL INSTITUCIONAL (nuestro) ══ #}
-<div style="margin-top:24px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
-  <p class="eyebrow">Historial dentro de la Institución</p>
-  <button class="boton boton-primario boton-chica" onclick="abrirHistorial()">+ Agregar</button>
-</div>
-<div class="scroll-tabla">
-  <table class="tabla-hv">
-    <thead><tr><th>Cargo</th><th>Unidad</th><th>Depto.</th><th>Tipo contrato</th><th>Estamento</th><th>Grado</th><th>Jornada</th><th>Desde</th><th>Hasta</th><th>Archivos</th></tr></thead>
-    <tbody>
-      {% for h in historial %}
-      <tr onclick="editarHistorial(this)"
-          data-id="{{ h.id }}"
-          data-cargo="{{ h.cargo or '' }}" data-unidad="{{ h.unidad or '' }}" data-departamento="{{ h.departamento or '' }}"
-          data-tipo_contrato="{{ h.tipo_contrato or '' }}" data-estamento="{{ h.estamento or '' }}"
-          data-grado="{{ h.grado or '' }}" data-jornada="{{ h.jornada or '' }}"
-          data-desde="{{ h.desde or '' }}" data-hasta="{{ h.hasta or '' }}"
-          data-observaciones="{{ h.observaciones or '' }}"
-          data-archivos='{{ h.archivos_json }}'>
-        <td>{{ h.cargo }}</td><td>{{ h.unidad }}</td><td>{{ h.departamento }}</td>
-        <td>{{ h.tipo_contrato }}</td><td>{{ h.estamento }}</td><td>{{ h.grado }}</td>
-        <td>{{ h.jornada }}</td><td>{{ h.desde }}</td><td>{{ h.hasta or '—' }}</td>
-        <td>{% if h.archivos %}<span class="badge-conteo">{{ h.archivos|length }}</span>{% else %}—{% endif %}</td>
-      </tr>
-      {% else %}<tr class="fila-vacia"><td colspan="10">Sin registros.</td></tr>{% endfor %}
-    </tbody>
-  </table>
-</div>
-
 {# ══ SECCIONES DINÁMICAS ══ #}
 {% for sec_id, sec_conf in secciones_config.items() %}
 {% set docs = documentos[sec_id] %}
@@ -284,54 +256,6 @@ function eliminarArchivo(sec_id, doc_id, arch_id) {
   document.body.appendChild(f); f.submit();
 }
 
-// ── Historial ──
-function abrirHistorial() {
-  document.getElementById('form-historial').reset();
-  document.getElementById('historial_id').value = '';
-  document.getElementById('hist-titulo').textContent = 'Nuevo registro de historial';
-  document.getElementById('btn-hist-guardar').formAction   = '/fichas/'+FID+'/historial/guardar';
-  document.getElementById('btn-hist-modificar').formAction = '/fichas/'+FID+'/historial/modificar';
-  document.getElementById('btn-hist-eliminar').formAction  = '/fichas/'+FID+'/historial/eliminar';
-  document.getElementById('archivos-actuales-hist').innerHTML = '';
-  document.getElementById('modal-historial').showModal();
-}
-
-function editarHistorial(fila) {
-  abrirHistorial();
-  document.getElementById('hist-titulo').textContent = 'Editar historial';
-  document.getElementById('historial_id').value = fila.dataset.id;
-  ['cargo','unidad','departamento','desde','hasta','observaciones'].forEach(function(k) {
-    var el = document.getElementById('h-' + (k==='departamento'?'dpto':k));
-    if (el) el.value = fila.dataset[k] || '';
-  });
-  document.getElementById('h-contrato').value   = fila.dataset.tipo_contrato || '';
-  document.getElementById('h-estamento').value  = fila.dataset.estamento || '';
-  document.getElementById('h-grado').value      = fila.dataset.grado || '';
-  document.getElementById('h-jornada').value    = fila.dataset.jornada || '';
-  _pintarArchivosHist(fila.dataset.archivos, fila.dataset.id);
-}
-
-function _pintarArchivosHist(archivosJson, hid) {
-  const cont = document.getElementById('archivos-actuales-hist');
-  cont.innerHTML = '';
-  try {
-    JSON.parse(archivosJson || '[]').forEach(function(a) {
-      const div = document.createElement('div');
-      div.className = 'chip-doc';
-      div.innerHTML = '<span>' + a.nombre + '</span><span style="display:flex;gap:10px">' +
-        '<a href="' + a.url + '" target="_blank">Ver</a>' +
-        '<a href="#" class="quitar" onclick="event.preventDefault();eliminarArchivoHist('+hid+','+a.id+')">Quitar</a></span>';
-      cont.appendChild(div);
-    });
-  } catch(e) {}
-}
-
-function eliminarArchivoHist(hid, aid) {
-  if (!confirm('¿Eliminar este archivo?')) return;
-  const f = document.createElement('form');
-  f.method='post'; f.action='/fichas/'+FID+'/historial/'+hid+'/archivos/'+aid+'/eliminar';
-  document.body.appendChild(f); f.submit();
-}
 </script>
 
 {% endif %}
