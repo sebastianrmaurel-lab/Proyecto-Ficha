@@ -1,63 +1,51 @@
 {% extends "base.html" %}
-
-{% block titulo %}Fichas de Personal{% endblock %}
-
+{% block titulo %}Hojas de Vida{% endblock %}
 {% block contenido %}
-  <div class="timbre-modulo">
-    <div>
-      <p class="titulo-principal">Fichas de Personal</p>
-      <p class="subtitulo">{{ fichas|length }} ficha{{ '' if fichas|length == 1 else 's' }} registrada{{ '' if fichas|length == 1 else 's' }}</p>
-    </div>
-    <div class="acciones-pagina">
-      <a class="boton boton-secundario" href="{{ url_for('fichas_exportar') }}">Exportar a Excel</a>
-      <a class="boton boton-secundario" href="{{ url_for('fichas_importar_get') }}">Importar desde Excel</a>
-      <a class="boton boton-fantasma" href="{{ url_for('fichas_papelera') }}">Papelera{% if en_papelera %} ({{ en_papelera }}){% endif %}</a>
-      <a class="boton boton-primario" href="{{ url_for('ficha_nueva') }}">+ Nueva ficha</a>
-    </div>
+<div class="timbre-modulo">
+  <div>
+    <p class="titulo-principal">Hojas de Vida de Personal</p>
+    <p class="subtitulo">{{ fichas|length }} persona(s) registrada(s)</p>
   </div>
-
-  <form method="get" class="buscador-rut">
-    <input type="text" name="q" placeholder="Buscar por nombre o RUT..." value="{{ q }}">
-    <button class="boton boton-secundario" type="submit">Buscar</button>
-    {% if q %}<a class="boton boton-fantasma" href="{{ url_for('fichas_listado') }}">Ver todas</a>{% endif %}
-  </form>
-
-  <div class="tabla-actos-contenedor">
-    <table class="tabla-actos">
-      <thead>
-        <tr>
-          <th></th>
-          <th>Nombre</th>
-          <th>RUT</th>
-          <th>Jerarquía</th>
-          <th>Actos administrativos</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for ficha in fichas %}
-          <tr onclick="window.location.href='{{ url_for('ficha_detalle', ficha_id=ficha.id) }}'">
-            <td style="width:1%;">
-              <div class="avatar-mini">
-                {% if ficha.foto %}
-                  <img src="{{ url_for('static', filename='uploads/' + ficha.foto) }}" alt="">
-                {% else %}
-                  {{ ficha.nombre[0] | upper }}
-                {% endif %}
-              </div>
-            </td>
-            <td>{{ ficha.nombre }}</td>
-            <td>{{ ficha.rut }}</td>
-            <td>{{ ficha.jerarquia or '—' }}</td>
-            <td><span class="badge-conteo">{{ ficha.total_actos }}</span></td>
-          </tr>
-        {% else %}
-          <tr class="fila-vacia">
-            <td colspan="5">
-              {% if q %}No se encontraron fichas para "{{ q }}".{% else %}Todavía no hay fichas registradas.{% endif %}
-            </td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <div class="acciones-pagina">
+    <a class="boton boton-secundario" href="{{ url_for('fichas_exportar') }}">Exportar Excel</a>
+    <a class="boton boton-secundario" href="{{ url_for('fichas_importar_get') }}">Importar Excel</a>
+    <a class="boton boton-fantasma" href="{{ url_for('fichas_papelera') }}">Papelera{% if en_papelera %} ({{ en_papelera }}){% endif %}</a>
+    <a class="boton boton-primario" href="{{ url_for('ficha_nueva') }}">+ Nueva hoja de vida</a>
   </div>
+</div>
+
+<form method="get" class="buscador-rut">
+  <input type="text" name="q" value="{{ q }}" placeholder="Buscar por nombre o RUT...">
+  <button class="boton boton-secundario" type="submit">Buscar</button>
+  {% if q %}<a class="boton boton-fantasma" href="{{ url_for('fichas_listado') }}">Ver todas</a>{% endif %}
+</form>
+
+<div class="tabla-actos-contenedor">
+  <table class="tabla-actos">
+    <thead>
+      <tr>
+        <th></th><th>Nombre</th><th>RUT</th><th>Cargo actual</th><th>Unidad</th><th>Documentos</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in fichas %}
+      <tr onclick="window.location.href='{{ url_for('ficha_detalle', fid=f.id) }}'">
+        <td style="width:1%">
+          <div class="avatar-mini">
+            {% if f.foto %}<img src="{{ url_for('static', filename='uploads/'+f.foto) }}" alt="" style="width:34px;height:34px;border-radius:50%;object-fit:cover">
+            {% else %}{{ f.nombre[0]|upper }}{% endif %}
+          </div>
+        </td>
+        <td>{{ f.nombre }}</td>
+        <td style="font-family:var(--font-mono)">{{ f.rut }}</td>
+        <td>{{ f.calidad_actual or '—' }}</td>
+        <td>{{ f.unidad_actual or '—' }}</td>
+        <td><span class="badge-conteo">{{ f.total_docs }}</span></td>
+      </tr>
+      {% else %}
+      <tr class="fila-vacia"><td colspan="6">{% if q %}Sin resultados para "{{ q }}".{% else %}No hay hojas de vida registradas.{% endif %}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
 {% endblock %}

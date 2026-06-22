@@ -24,10 +24,10 @@
             <td>{{ ficha.rut }}</td>
             <td>{{ ficha.jerarquia or '—' }}</td>
             <td style="white-space:nowrap;">
-              <form method="post" action="{{ url_for('ficha_restaurar', ficha_id=ficha.id) }}" style="display:inline;">
+              <form method="post" action="{{ url_for('ficha_restaurar', fid=ficha.id) }}" style="display:inline;">
                 <button class="boton boton-secundario boton-chica" type="submit">Restaurar</button>
               </form>
-              <form method="post" action="{{ url_for('ficha_eliminar_definitivo', ficha_id=ficha.id) }}" style="display:inline;" onsubmit="return confirm('¿Eliminar definitivamente esta ficha junto con sus actos y asignaciones familiares? Esta acción no se puede deshacer.');">
+              <form method="post" action="{{ url_for('ficha_eliminar_definitivo', fid=ficha.id) }}" style="display:inline;" onsubmit="return confirm('¿Eliminar definitivamente esta ficha junto con sus actos y asignaciones familiares? Esta acción no se puede deshacer.');">
                 <button class="boton boton-peligro boton-chica" type="submit">Eliminar definitivo</button>
               </form>
             </td>
