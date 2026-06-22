@@ -1032,37 +1032,42 @@ def _leer_excel(stream):
     from openpyxl import load_workbook
     wb = load_workbook(stream, data_only=True); ws = wb.active
     enc = [str(c.value).strip() if c.value else '' for c in next(ws.iter_rows(min_row=1,max_row=1))]
+
     def col(fila, nombre):
         for i,e in enumerate(enc):
-            if nombre.lower() in e.lower(): return fila[i]
+            if e and nombre.lower() in e.lower(): return fila[i]
         return None
+
     def s(v):
         if v is None: return ''
         if hasattr(v,'strftime'): return v.strftime('%Y-%m-%d')
         return str(v).strip()
-    personas = {}
+
+    personas = []
     for fila in ws.iter_rows(min_row=2, values_only=True):
         if not any(c is not None for c in fila): continue
-        id_f = s(col(fila,'IdFuncionario')) or s(col(fila,'Funcionario'))
-        if not id_f: continue
-        if id_f not in personas:
-            personas[id_f] = {
-                'id_original':id_f, 'nombre':s(col(fila,'Funcionario')),
-                'fecha_nacimiento':s(col(fila,'FechaNac')), 'estado_civil':s(col(fila,'EstadoCivil')),
-                'titulo':s(col(fila,'Titulo')), 'direccion':s(col(fila,'Direccion')),
-                'telefono':s(col(fila,'Telefono')), 'correo':s(col(fila,'Correo')),
-                'rut':'', 'designaciones':[],
-            }
-        decreto=s(col(fila,'Decreto')); glosa=s(col(fila,'GLOSA')); calidad=s(col(fila,'Calidad'))
-        if decreto or glosa:
-            personas[id_f]['designaciones'].append({
-                'tipo_documento':'Resolución Exenta', 'numero_documento':decreto,
-                'fecha_documento':s(col(fila,'Fecha')), 'servicio_documento':s(col(fila,'Unidad')),
-                'estado_tramite':'Registrado - Válido',
-                'datos_extra':{'fecha_desde':s(col(fila,'Desde')),'fecha_hasta':s(col(fila,'Hasta')),
-                               'calidad':calidad,'horas':s(col(fila,'Jornada')),'glosa':glosa}
-            })
-    return list(personas.values())
+        persona = {
+            'rut':              s(col(fila,'Run')),
+            'rol':              s(col(fila,'ROL')),
+            'pasaporte':        s(col(fila,'Pasaporte')),
+            'pais_nacionalidad':s(col(fila,'País')),
+            'nombre':           s(col(fila,'Nombre')),
+            'correo':           s(col(fila,'Correo')),
+            'region':           s(col(fila,'Región')),
+            'comuna':           s(col(fila,'Comuna')),
+            'ciudad':           s(col(fila,'Ciudad')),
+            'fecha_nacimiento': s(col(fila,'Fecha Nacimiento')),
+            'estado_civil':     s(col(fila,'Estado Civil')),
+            'jerarquia':        s(col(fila,'Jerarquía')),
+            'grado_academico':  s(col(fila,'Grado')),
+            'titulo':           s(col(fila,'Título')),
+            'telefono':         s(col(fila,'Teléfono')),
+            'direccion':        s(col(fila,'Dirección')),
+            'observaciones':    s(col(fila,'Observaciones')),
+        }
+        if persona['nombre'] or persona['rut']:
+            personas.append(persona)
+    return personas
 
 @app.route('/fichas/importar', methods=['GET'])
 @login_required
@@ -1088,44 +1093,37 @@ def fichas_importar_post():
 @app.route('/fichas/confirmar-importacion', methods=['POST'])
 @login_required
 def fichas_confirmar_importacion():
-    cantidad = int(request.form.get('cantidad_personas',0))
+    g = lambda k: request.form.get(k,'').strip()
+    cantidad = int(g('cantidad_personas') or 0)
     db = get_db(); creadas=0; omitidas=[]
+    campos = ['nombre','rut','rol','pasaporte','pais_nacionalidad','region','comuna','ciudad',
+              'correo','fecha_nacimiento','estado_civil','jerarquia','grado_academico',
+              'titulo','telefono','direccion','observaciones']
     for i in range(cantidad):
-        rut    = request.form.get(f'rut_{i}','').strip()
-        nombre = request.form.get(f'nombre_{i}','').strip()
+        nombre = g(f'nombre_{i}')
+        rut    = g(f'rut_{i}')
         if not nombre: continue
         if not rut or not rut_valido(rut):
-            omitidas.append(f'{nombre} (RUT inválido)'); continue
+            omitidas.append(f'{nombre} (RUT inválido o vacío)'); continue
         if db.execute('SELECT id FROM fichas WHERE rut=?',(rut,)).fetchone():
             omitidas.append(f'{nombre} (RUT ya existe)'); continue
         numeros_usados = {r[0] for r in db.execute('SELECT numero_ficha FROM fichas WHERE numero_ficha IS NOT NULL')}
-        num_ficha = 1
-        while num_ficha in numeros_usados: num_ficha += 1
-        cur = db.execute('''INSERT INTO fichas (numero_ficha,nombre,rut,titulo,direccion,fecha_nacimiento,estado_civil,telefono,correo,activo)
-                            VALUES(?,?,?,?,?,?,?,?,?,1)''',
-                         (num_ficha,nombre,rut,request.form.get(f'titulo_{i}',''),
-                          request.form.get(f'direccion_{i}',''),request.form.get(f'fecha_nacimiento_{i}',''),
-                          request.form.get(f'estado_civil_{i}',''),request.form.get(f'telefono_{i}',''),
-                          request.form.get(f'correo_{i}','')))
-        fid = cur.lastrowid
-        n_des = int(request.form.get(f'n_des_{i}',0))
-        for j in range(n_des):
-            extra = {'fecha_desde':request.form.get(f'd_{i}_{j}_fecha_desde',''),
-                     'fecha_hasta':request.form.get(f'd_{i}_{j}_fecha_hasta',''),
-                     'calidad':request.form.get(f'd_{i}_{j}_calidad',''),
-                     'horas':request.form.get(f'd_{i}_{j}_horas','')}
-            db.execute('''INSERT INTO documentos_hv (ficha_id,seccion,tipo_documento,numero_documento,
-                          fecha_documento,servicio_documento,estado_tramite,datos_extra)
-                          VALUES(?,?,?,?,?,?,?,?)''',
-                       (fid,'designaciones',
-                        request.form.get(f'd_{i}_{j}_tipo',''),
-                        request.form.get(f'd_{i}_{j}_numero',''),
-                        request.form.get(f'd_{i}_{j}_fecha',''),
-                        request.form.get(f'd_{i}_{j}_servicio',''),
-                        request.form.get(f'd_{i}_{j}_estado',''),
-                        json.dumps(extra)))
+        num = 1
+        while num in numeros_usados: num += 1
+        vals = {c: g(f'{c}_{i}') for c in campos}
+        db.execute('''INSERT INTO fichas
+            (numero_ficha,nombre,rut,rol,pasaporte,pais_nacionalidad,region,comuna,ciudad,
+             correo,fecha_nacimiento,estado_civil,jerarquia,grado_academico,titulo,
+             telefono,direccion,observaciones,activo)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)''',
+            (num,vals['nombre'],vals['rut'],vals['rol'],vals['pasaporte'],vals['pais_nacionalidad'],
+             vals['region'],vals['comuna'],vals['ciudad'],vals['correo'],vals['fecha_nacimiento'],
+             vals['estado_civil'],vals['jerarquia'],vals['grado_academico'],vals['titulo'],
+             vals['telefono'],vals['direccion'],vals['observaciones']))
         db.commit(); creadas+=1
-    msg = f'{creadas} ficha(s) importada(s).'
+        auditoria('crear','ficha',db.execute('SELECT last_insert_rowid()').fetchone()[0],
+                  f'Importada desde Excel: {nombre} ({rut})')
+    msg = f'{creadas} hoja(s) de vida importada(s) correctamente.'
     if omitidas: msg += f' Omitidas: {"; ".join(omitidas)}'
     flash(msg, 'error' if omitidas else 'success')
     return redirect(url_for('fichas_listado'))

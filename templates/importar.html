@@ -1,176 +1,84 @@
 {% extends "base.html" %}
-{% block titulo %}Importar desde Excel{% endblock %}
+{% block titulo %}Importar Hoja de Vida{% endblock %}
 {% block contenido %}
 
-  <a class="boton boton-fantasma" href="{{ url_for('fichas_listado') }}" style="margin-bottom:16px;">← Volver al listado</a>
+<a class="boton boton-fantasma" href="{{ url_for('fichas_listado') }}" style="margin-bottom:16px">← Volver</a>
 
-  <div class="timbre-modulo">
-    <div>
-      <p class="titulo-principal">Importar desde Excel</p>
-      <p class="subtitulo">Carga un archivo .xlsx para pre-rellenar las fichas — revisa y agrega el RUT antes de confirmar</p>
-    </div>
+<div class="timbre-modulo">
+  <div>
+    <p class="titulo-principal">Importar Hoja de Vida</p>
+    <p class="subtitulo">Carga el Excel con los datos de una o varias personas</p>
+  </div>
+</div>
+
+{% if error %}
+  <div class="mensaje error" style="margin-bottom:16px">{{ error }}</div>
+{% endif %}
+
+{% if not personas %}
+  <div class="seccion-ficha" style="max-width:580px;">
+    <p class="eyebrow">Formato del archivo</p>
+    <p style="font-size:.85rem;color:var(--ink-soft);margin:0 0 14px;line-height:1.6">
+      El Excel debe tener una fila de encabezados con estas columnas:<br>
+      <span style="font-family:var(--font-mono);font-size:.78rem">
+        Run (RUT) · ROL · Pasaporte · País Nacionalidad · Nombre Completo · Correo · Región · Comuna · Ciudad ·
+        Fecha Nacimiento · Estado Civil · Jerarquía · Grado Académico · Título · Teléfono · Dirección · Observaciones
+      </span><br><br>
+      Cada fila es una persona. Se importan todas las que tengan Nombre o RUT.
+    </p>
+    <form method="post" enctype="multipart/form-data">
+      <div class="campo" style="margin-bottom:14px">
+        <label for="excel" style="font-size:.78rem;font-weight:600;color:var(--ink-soft)">Archivo Excel (.xlsx)</label>
+        <input type="file" id="excel" name="excel" accept=".xlsx,.xls" required style="margin-top:6px">
+      </div>
+      <button class="boton boton-primario" type="submit">Leer archivo →</button>
+    </form>
   </div>
 
-  {% if error %}
-    <div class="mensaje error" style="margin-bottom:20px;">{{ error }}</div>
-  {% endif %}
+{% else %}
+  <div class="seccion-ficha" style="margin-bottom:16px">
+    <p class="eyebrow">Previsualización</p>
+    <p style="font-size:.85rem;color:var(--ink-soft);margin:0">
+      Se encontraron <strong>{{ personas|length }}</strong> persona(s). Revisa los datos — el RUT ya viene del Excel.
+      Si algún RUT está vacío o inválido esa persona se omitirá y te avisará.
+    </p>
+  </div>
 
-  {% if not personas %}
-    {# Paso 1: subir el archivo #}
-    <div class="seccion-ficha" style="max-width:560px;">
-      <p class="eyebrow">Formato esperado</p>
-      <p style="font-size:0.85rem; color:var(--ink-soft); margin:0 0 16px; line-height:1.6;">
-        El Excel debe tener una fila de encabezados con estas columnas (los nombres no necesitan ser exactos, solo parecidos):<br>
-        <span style="font-family:var(--font-mono);">Funcionario · FechaNac · EstadoCivil · Titulo · Direccion · Telefono · Correo · IdFuncionario</span><br>
-        y para los actos:<br>
-        <span style="font-family:var(--font-mono);">Decreto o Res · Fecha · GLOSA DEL DOCUMENTO · Calidad · Desde · Hasta · Jornada · Escalafon · Unidad · MacroUn · Campus</span>
-      </p>
-      <form method="post" enctype="multipart/form-data">
-        <div class="campo" style="margin-bottom:16px;">
-          <label for="excel">Archivo Excel (.xlsx)</label>
-          <input type="file" id="excel" name="excel" accept=".xlsx,.xls" required>
+  <form method="post" action="{{ url_for('fichas_confirmar_importacion') }}">
+    <input type="hidden" name="cantidad_personas" value="{{ personas|length }}">
+
+    {% for persona in personas %}
+    {% set i = loop.index0 %}
+    <div class="seccion-ficha" style="margin-bottom:14px">
+      <p class="eyebrow" style="margin-bottom:14px">Persona {{ loop.index }} — {{ persona.nombre or '(sin nombre)' }}</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px 18px">
+        {% for key,label in [
+          ('nombre','Nombre Completo'),('rut','Run (RUT)'),('correo','Correo'),
+          ('fecha_nacimiento','Fecha Nacimiento'),('estado_civil','Estado Civil'),('sexo','Sexo'),
+          ('titulo','Título'),('grado_academico','Grado Académico'),('jerarquia','Jerarquía'),
+          ('telefono','Teléfono'),('region','Región'),('comuna','Comuna'),
+          ('ciudad','Ciudad'),('pais_nacionalidad','País Nacionalidad'),('rol','ROL'),
+          ('pasaporte','Pasaporte'),('direccion','Dirección'),('observaciones','Observaciones')
+        ] %}
+        <div class="campo" {% if key in ('direccion','observaciones') %}style="grid-column:1/-1"{% endif %}>
+          <label style="font-size:.72rem;font-weight:600;color:var(--ink-soft)">
+            {{ label }}{% if key == 'rut' %} <span style="color:var(--accent)">*</span>{% endif %}
+          </label>
+          <input type="text" name="{{ key }}_{{ i }}" value="{{ persona.get(key,'') }}"
+                 {% if key == 'rut' %}class="formato-rut"{% endif %}
+                 style="background:var(--surface-muted);border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:.84rem;width:100%;margin-top:4px">
         </div>
-        <button class="boton boton-primario" type="submit">Leer Excel →</button>
-      </form>
-    </div>
-
-  {% else %}
-    {# Paso 2: previsualización y confirmación #}
-    <div class="seccion-ficha" style="margin-bottom:18px;">
-      <p class="eyebrow">Previsualización</p>
-      <p style="font-size:0.85rem; color:var(--ink-soft); margin:0;">
-        Se encontraron <strong>{{ personas|length }}</strong> persona(s). Revisa los datos, completa el <strong>RUT</strong> (obligatorio) y haz clic en "Confirmar importación".
-        Puedes editar cualquier campo antes de confirmar.
-      </p>
-    </div>
-
-    <form method="post" action="{{ url_for('fichas_confirmar_importacion') }}">
-      <input type="hidden" name="cantidad_personas" value="{{ personas|length }}">
-
-      {% for persona in personas %}{% set i = loop.index0 %}
-        <div class="seccion-ficha" style="margin-bottom:20px;">
-          <div class="timbre-modulo" style="margin-bottom:16px;">
-            <div>
-              <p class="eyebrow">Persona {{ i + 1 }} — {{ persona.nombre or '(sin nombre)' }}</p>
-              <p style="font-size:0.78rem; color:var(--ink-soft); margin:0;">
-                ID original en Excel: <span style="font-family:var(--font-mono);">{{ persona.id_original }}</span> ·
-                {{ persona.actos|length }} acto(s) · {{ persona.historial|length }} registro(s) de historial
-              </p>
-            </div>
-          </div>
-
-          <div class="rejilla-campos">
-            <div class="campo">
-              <label>Nombre completo</label>
-              <input type="text" name="nombre_{{ i }}" value="{{ persona.nombre }}">
-            </div>
-            <div class="campo">
-              <label>RUT <span style="color:var(--accent);">*</span></label>
-              <input type="text" name="rut_{{ i }}" value="{{ persona.rut }}" placeholder="12.345.678-9" required class="formato-rut">
-            </div>
-            <div class="campo">
-              <label>Fecha de nacimiento</label>
-              <input type="text" name="fecha_nacimiento_{{ i }}" value="{{ persona.fecha_nacimiento }}">
-            </div>
-            <div class="campo">
-              <label>Estado civil</label>
-              <input type="text" name="estado_civil_{{ i }}" value="{{ persona.estado_civil }}">
-            </div>
-            <div class="campo">
-              <label>Título</label>
-              <input type="text" name="titulo_{{ i }}" value="{{ persona.titulo }}">
-            </div>
-            <div class="campo">
-              <label>Teléfono</label>
-              <input type="text" name="telefono_{{ i }}" value="{{ persona.telefono }}">
-            </div>
-            <div class="campo campo-ancho">
-              <label>Dirección</label>
-              <input type="text" name="direccion_{{ i }}" value="{{ persona.direccion }}">
-            </div>
-            <div class="campo campo-ancho">
-              <label>Correo / Link</label>
-              <input type="text" name="link_{{ i }}" value="{{ persona.link }}">
-            </div>
-          </div>
-
-          {% if persona.actos %}
-            <p class="eyebrow" style="margin-top:20px;">Actos administrativos</p>
-            <input type="hidden" name="n_actos_{{ i }}" value="{{ persona.actos|length }}">
-            <div class="tabla-actos-contenedor" style="margin-bottom:0;">
-              <table class="tabla-actos" style="font-size:0.8rem;">
-                <thead><tr><th>#</th><th>Decreto</th><th>Fecha</th><th>Glosa</th><th>Tipo</th><th>Desde</th><th>Hasta</th></tr></thead>
-                <tbody>
-                  {% for acto in persona.actos %}{% set j = loop.index0 %}
-                    <input type="hidden" name="acto_{{ i }}_{{ j }}_decreto"   value="{{ acto.decreto }}">
-                    <input type="hidden" name="acto_{{ i }}_{{ j }}_fecha"     value="{{ acto.fecha }}">
-                    <input type="hidden" name="acto_{{ i }}_{{ j }}_glosa"     value="{{ acto.glosa }}">
-                    <input type="hidden" name="acto_{{ i }}_{{ j }}_tipo_acto" value="{{ acto.tipo_acto }}">
-                    <input type="hidden" name="acto_{{ i }}_{{ j }}_desde"     value="{{ acto.desde }}">
-                    <input type="hidden" name="acto_{{ i }}_{{ j }}_hasta"     value="{{ acto.hasta }}">
-                    <input type="hidden" name="acto_{{ i }}_{{ j }}_observaciones" value="">
-                    <input type="hidden" name="acto_{{ i }}_{{ j }}_soporte"   value="">
-                    <tr>
-                      <td>{{ j + 1 }}</td>
-                      <td>{{ acto.decreto }}</td>
-                      <td>{{ acto.fecha }}</td>
-                      <td>{{ acto.glosa }}</td>
-                      <td><span class="etiqueta-tipo-acto">{{ acto.tipo_acto }}</span></td>
-                      <td>{{ acto.desde }}</td>
-                      <td>{{ acto.hasta or '—' }}</td>
-                    </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-            </div>
-          {% else %}
-            <input type="hidden" name="n_actos_{{ i }}" value="0">
-          {% endif %}
-
-          {% if persona.historial %}
-            <p class="eyebrow" style="margin-top:20px;">Historial institucional</p>
-            <input type="hidden" name="n_hist_{{ i }}" value="{{ persona.historial|length }}">
-            <div class="tabla-actos-contenedor" style="margin-bottom:0;">
-              <table class="tabla-actos" style="font-size:0.8rem;">
-                <thead><tr><th>#</th><th>Tipo contrato</th><th>Unidad</th><th>Depto.</th><th>Grado</th><th>Jornada</th><th>Desde</th><th>Hasta</th></tr></thead>
-                <tbody>
-                  {% for reg in persona.historial %}{% set k = loop.index0 %}
-                    <input type="hidden" name="hist_{{ i }}_{{ k }}_cargo"         value="{{ reg.cargo }}">
-                    <input type="hidden" name="hist_{{ i }}_{{ k }}_unidad"        value="{{ reg.unidad }}">
-                    <input type="hidden" name="hist_{{ i }}_{{ k }}_departamento"  value="{{ reg.departamento }}">
-                    <input type="hidden" name="hist_{{ i }}_{{ k }}_tipo_contrato" value="{{ reg.tipo_contrato }}">
-                    <input type="hidden" name="hist_{{ i }}_{{ k }}_grado"         value="{{ reg.grado }}">
-                    <input type="hidden" name="hist_{{ i }}_{{ k }}_jornada"       value="{{ reg.jornada }}">
-                    <input type="hidden" name="hist_{{ i }}_{{ k }}_desde"         value="{{ reg.desde }}">
-                    <input type="hidden" name="hist_{{ i }}_{{ k }}_hasta"         value="{{ reg.hasta }}">
-                    <input type="hidden" name="hist_{{ i }}_{{ k }}_observaciones" value="{{ reg.observaciones }}">
-                    <tr>
-                      <td>{{ k + 1 }}</td>
-                      <td>{{ reg.tipo_contrato }}</td>
-                      <td>{{ reg.unidad }}</td>
-                      <td>{{ reg.departamento }}</td>
-                      <td>{{ reg.grado }}</td>
-                      <td>{{ reg.jornada }}</td>
-                      <td>{{ reg.desde }}</td>
-                      <td>{{ reg.hasta or '—' }}</td>
-                    </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-            </div>
-          {% else %}
-            <input type="hidden" name="n_hist_{{ i }}" value="0">
-          {% endif %}
-
-        </div>
-      {% endfor %}
-
-      <div class="fila-acciones" style="position:sticky; bottom:0; background:var(--bg); padding:16px 0; border-top:1px solid var(--border);">
-        <button class="boton boton-primario" type="submit">Confirmar e importar {{ personas|length }} ficha(s)</button>
-        <a class="boton boton-fantasma" href="{{ url_for('fichas_importar_get') }}">← Cargar otro archivo</a>
-        <a class="boton boton-fantasma" href="{{ url_for('fichas_listado') }}">Cancelar</a>
+        {% endfor %}
       </div>
-    </form>
-  {% endif %}
+    </div>
+    {% endfor %}
+
+    <div style="display:flex;gap:10px;padding:14px 0;border-top:1px solid var(--border);position:sticky;bottom:0;background:var(--bg)">
+      <button class="boton boton-primario" type="submit">Importar {{ personas|length }} hoja(s) de vida</button>
+      <a class="boton boton-fantasma" href="{{ url_for('fichas_importar_get') }}">← Cargar otro archivo</a>
+      <a class="boton boton-fantasma" href="{{ url_for('fichas_listado') }}">Cancelar</a>
+    </div>
+  </form>
+{% endif %}
 
 {% endblock %}
