@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block titulo %}Fichas de Personal{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="{{ url_for('static', filename='estilo.css') }}">
+</head>
+<body>
+  <div class="contenedor">
+    {% if session.usuario_id %}
+      <div class="barra-superior">
+        <nav>
+          <a class="enlace-nav {{ 'activo' if request.path == '/dashboard' else '' }}" href="{{ url_for('dashboard') }}">Dashboard</a>
+          <a class="enlace-nav {{ 'activo' if request.path.startswith('/fichas') else '' }}" href="{{ url_for('fichas_listado') }}">Fichas de Personal</a>
+        </nav>
+        <div class="acciones-pagina">
+          <span class="boton-chica" style="color:var(--ink-soft); font-size:0.8rem;">{{ session.usuario_nombre }}</span>
+          <a class="boton boton-fantasma" href="{{ url_for('logout') }}">Cerrar sesión</a>
+        </div>
+      </div>
+    {% endif %}
+
+    {% with mensajes = get_flashed_messages(with_categories=true) %}
+      {% if mensajes %}
+        <div class="mensajes">
+          {% for categoria, texto in mensajes %}
+            <div class="mensaje {{ 'error' if categoria == 'error' else 'success' }}">{{ texto }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% block contenido %}{% endblock %}
+  </div>
+
+  <script src="{{ url_for('static', filename='rut.js') }}"></script>
+</body>
+</html>
