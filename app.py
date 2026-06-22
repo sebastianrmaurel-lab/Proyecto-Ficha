@@ -616,6 +616,7 @@ def fichas_confirmar_importacion():
         flash(f'{creadas} ficha(s) importada(s) correctamente desde Excel.', 'success')
     return redirect(url_for('fichas_listado'))
 
+@app.route('/fichas/exportar')
 @login_required
 def fichas_exportar():
     db = get_db()
