@@ -1,61 +1,646 @@
-{% extends "base.html" %}
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
-{% block titulo %}Dashboard{% endblock %}
+:root {
+  --bg: #eef1f5;
+  --surface: #ffffff;
+  --surface-muted: #f5f7fa;
+  --ink: #161a1f;
+  --ink-soft: #5b6470;
+  --border: #dde1e7;
+  --primary: #1c3d5a;
+  --primary-dark: #122a3f;
+  --primary-soft: #e7edf3;
+  --accent: #9c2b2b;
+  --accent-soft: #f6e7e6;
+  --radius: 10px;
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-body: 'Inter', -apple-system, sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+}
 
-{% block contenido %}
-  <div class="timbre-modulo">
-    <div>
-      <p class="titulo-principal">Dashboard</p>
-      <p class="subtitulo">Resumen general del sistema de fichas</p>
-    </div>
-  </div>
+* { box-sizing: border-box; }
 
-  <div class="rejilla-kpis">
-    <div class="tarjeta-kpi">
-      <p class="kpi-valor">{{ total_fichas }}</p>
-      <p class="kpi-etiqueta">Fichas activas</p>
-    </div>
-    <div class="tarjeta-kpi">
-      <p class="kpi-valor">{{ total_actos }}</p>
-      <p class="kpi-etiqueta">Actos administrativos</p>
-    </div>
-    <div class="tarjeta-kpi">
-      <p class="kpi-valor">{{ total_familiares }}</p>
-      <p class="kpi-etiqueta">Asignaciones familiares</p>
-    </div>
-    <div class="tarjeta-kpi">
-      <p class="kpi-valor">{{ en_papelera }}</p>
-      <p class="kpi-etiqueta">En la papelera</p>
-      <a class="enlace-kpi" href="{{ url_for('fichas_papelera') }}">Ver papelera →</a>
-    </div>
-  </div>
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--ink);
+}
 
-  {% if meses_resumen %}
-    <div class="seccion-ficha" style="margin-top:8px;">
-      <p class="eyebrow">Carpetas creadas por mes</p>
-      <div class="tabla-actos-contenedor" style="max-height:none;">
-        <table class="tabla-actos">
-          <thead>
-            <tr>
-              <th>Glosa</th>
-              {% for mes in meses_resumen %}<th class="numero">{{ mes.label }}</th>{% endfor %}
-              <th class="numero">Total general</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Carpeta Funcionario</td>
-              {% for mes in meses_resumen %}<td class="numero">{{ mes.total }}</td>{% endfor %}
-              <td class="numero">{{ total_general_carpetas }}</td>
-            </tr>
-            <tr class="fila-total">
-              <td>Total general</td>
-              {% for mes in meses_resumen %}<td class="numero">{{ mes.total }}</td>{% endfor %}
-              <td class="numero">{{ total_general_carpetas }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  {% endif %}
-{% endblock %}
+.contenedor {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 28px 24px 60px;
+}
+
+/* ---- Barra superior ---- */
+.barra-superior {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 22px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.barra-superior nav {
+  display: flex;
+  gap: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px;
+}
+
+.enlace-nav {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  text-decoration: none;
+  padding: 8px 14px;
+  border-radius: 7px;
+}
+
+.enlace-nav:hover {
+  background: var(--surface-muted);
+  color: var(--ink);
+}
+
+.enlace-nav.activo {
+  background: var(--primary);
+  color: white;
+}
+
+.boton-chica {
+  padding: 6px 10px;
+  font-size: 0.78rem;
+}
+
+.avatar-mini {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--primary-soft);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.8rem;
+  overflow: hidden;
+}
+
+.avatar-mini img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.badge-conteo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+
+/* ---- Mensajes flash ---- */
+.mensajes { margin-bottom: 16px; }
+
+.mensaje {
+  padding: 11px 16px;
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+  font-size: 0.88rem;
+  font-weight: 500;
+  border: 1px solid transparent;
+}
+
+.mensaje.success { background: #eaf6ee; color: #1d6b3a; border-color: #cfe9d6; }
+.mensaje.error { background: #fdecec; color: #9c2b2b; border-color: #f6d3d3; }
+
+/* ---- Encabezado de módulo: el "timbre" de ficha ---- */
+.timbre-modulo {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 26px;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.timbre-modulo .titulo-principal {
+  font-family: var(--font-display);
+  font-size: 1.7rem;
+  font-weight: 700;
+  margin: 0 0 4px;
+  letter-spacing: -0.01em;
+}
+
+.timbre-modulo .subtitulo {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  margin: 0;
+}
+
+.numero-ficha {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--primary);
+  background: var(--primary-soft);
+  border: 1px dashed var(--primary);
+  border-radius: 999px;
+  padding: 5px 14px;
+  white-space: nowrap;
+}
+
+/* ---- Botones ---- */
+.boton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 10px 18px;
+  cursor: pointer;
+  text-decoration: none;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.boton-primario { background: var(--primary); color: white; }
+.boton-primario:hover { background: var(--primary-dark); }
+
+.boton-secundario { background: var(--surface); color: var(--ink); border-color: var(--border); }
+.boton-secundario:hover { background: var(--surface-muted); }
+
+.boton-peligro { background: var(--surface); color: var(--accent); border-color: #ecc9c9; }
+.boton-peligro:hover { background: var(--accent-soft); }
+
+.boton-fantasma { background: transparent; color: var(--ink-soft); border-color: var(--border); }
+.boton-fantasma:hover { background: var(--surface-muted); }
+
+.boton-archivo { position: relative; overflow: hidden; }
+.boton-archivo input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+/* ---- Buscador por RUT ---- */
+.buscador-rut {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.buscador-rut input[type="text"] {
+  font-family: var(--font-mono);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 0.92rem;
+  min-width: 220px;
+  color: var(--ink);
+}
+
+.buscador-rut input[type="text"]:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+/* ---- Modal (dialog) para agregar/editar actos y asignaciones ---- */
+.oculto { display: none !important; }
+
+dialog {
+  border: none;
+  border-radius: var(--radius);
+  padding: 0;
+  width: min(720px, 92vw);
+  max-height: 88vh;
+  overflow-y: auto;
+}
+
+dialog::backdrop {
+  background: rgba(15, 20, 30, 0.55);
+}
+
+dialog form {
+  padding: 24px 26px;
+}
+
+.encabezado-modal {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.titulo-modal {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.cerrar-modal {
+  background: none;
+  border: none;
+  font-size: 1.4rem;
+  line-height: 1;
+  color: var(--ink-soft);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+.cerrar-modal:hover { background: var(--surface-muted); }
+
+dialog .formulario-actos {
+  border: none;
+  padding: 0;
+  margin-bottom: 0;
+}
+
+dialog .fila-acciones { margin-top: 18px; }
+
+.campo input[type="file"] {
+  width: 100%;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 8px 11px;
+  font-size: 0.85rem;
+  font-family: var(--font-body);
+  color: var(--ink);
+}
+
+/* ---- Tarjeta general ---- */
+.tarjeta {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+/* ---- Layout ficha personal ---- */
+.layout-ficha {
+  display: grid;
+  grid-template-columns: 1.25fr 0.65fr;
+  gap: 20px;
+  align-items: start;
+}
+
+.seccion-ficha {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 22px 24px;
+  margin-bottom: 16px;
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--primary);
+  margin: 0 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.eyebrow::before {
+  content: '';
+  width: 14px;
+  height: 2px;
+  background: var(--primary);
+  display: inline-block;
+}
+
+.rejilla-campos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 20px;
+}
+
+.rejilla-campos .campo-ancho { grid-column: 1 / -1; }
+
+.campo label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  margin-bottom: 6px;
+}
+
+.campo input[type="text"],
+.campo input[type="password"],
+.campo input[type="date"],
+.campo select {
+  width: 100%;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 9px 11px;
+  font-size: 0.9rem;
+  font-family: var(--font-body);
+  color: var(--ink);
+}
+
+.campo input:focus,
+.campo select:focus {
+  outline: none;
+  border-color: var(--primary);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+.campo.identificador input { font-family: var(--font-mono); }
+
+.fila-acciones {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+
+/* ---- Columna foto / documentos ---- */
+.columna-lateral .seccion-ficha { padding: 18px; }
+
+.caja-foto {
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  aspect-ratio: 4 / 3.6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+
+.caja-foto img { width: 100%; height: 100%; object-fit: cover; }
+
+.caja-foto .sin-foto {
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  font-weight: 500;
+  text-align: center;
+  padding: 0 16px;
+}
+
+.chip-documento {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 8px 12px;
+  font-size: 0.78rem;
+  margin-top: 4px;
+}
+
+.chip-documento a { color: var(--primary); font-weight: 600; text-decoration: none; }
+.chip-documento a:hover { text-decoration: underline; }
+
+.lista-archivos-adjuntos { margin-top: 14px; }
+.lista-archivos-adjuntos .chip-documento { margin-top: 8px; }
+.lista-archivos-adjuntos .chip-documento span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- Botón secundario angosto (acción de página, ej. Traspaso) ---- */
+.acciones-pagina { display: flex; gap: 8px; }
+
+/* ---- Tabla de actos administrativos ---- */
+.tabla-actos-contenedor {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  max-height: 360px;
+  overflow-y: auto;
+  overflow-x: auto;
+  margin-bottom: 22px;
+}
+
+table.tabla-actos {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+}
+
+table.tabla-actos th {
+  text-align: left;
+  padding: 10px 14px;
+  background: var(--surface-muted);
+  color: var(--ink-soft);
+  font-weight: 600;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  position: sticky;
+  top: 0;
+}
+
+table.tabla-actos td {
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+table.tabla-actos td:first-child,
+table.tabla-actos td:nth-child(2) { font-family: var(--font-mono); }
+
+table.tabla-actos tr { cursor: pointer; }
+table.tabla-actos tr:hover td { background: var(--primary-soft); }
+
+table.tabla-actos th.numero,
+table.tabla-actos td.numero {
+  text-align: right;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+table.tabla-actos tr.fila-total td {
+  font-weight: 600;
+  background: var(--surface-muted);
+  border-top: 2px solid var(--border);
+}
+
+/* ---- Dashboard: KPIs ---- */
+.rejilla-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.tarjeta-kpi {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+}
+
+.kpi-valor {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 0 0 2px;
+  line-height: 1;
+}
+
+.kpi-etiqueta {
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  margin: 0;
+  font-weight: 500;
+}
+
+.kpi-detalle {
+  font-size: 0.74rem;
+  color: var(--ink-soft);
+  margin: 8px 0 0;
+}
+
+.enlace-kpi {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.enlace-kpi:hover { text-decoration: underline; }
+
+@media (max-width: 900px) {
+  .rejilla-kpis { grid-template-columns: 1fr 1fr; }
+}
+
+.etiqueta-tipo-acto {
+  display: inline-block;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+
+.tabla-actos tr.fila-vacia td {
+  text-align: center;
+  color: var(--ink-soft);
+  font-weight: 500;
+  cursor: default;
+  padding: 28px 14px;
+}
+
+.formulario-actos {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 22px 24px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 20px;
+  margin-bottom: 18px;
+}
+
+.formulario-actos .campo input[type="text"],
+.formulario-actos .campo input[type="date"],
+.formulario-actos .campo select {
+  width: 100%;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 9px 11px;
+  font-size: 0.9rem;
+  font-family: var(--font-body);
+  color: var(--ink);
+}
+
+.formulario-actos .campo-ancho { grid-column: 1 / -1; }
+
+/* ---- Login ---- */
+.pantalla-login {
+  min-height: 80vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tarjeta-login {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 32px 30px;
+  width: 100%;
+  max-width: 320px;
+}
+
+.tarjeta-login .numero-ficha {
+  display: block;
+  width: fit-content;
+  margin: 0 auto 18px;
+}
+
+.tarjeta-login h1 {
+  font-family: var(--font-display);
+  text-align: center;
+  font-size: 1.3rem;
+  margin: 0 0 4px;
+}
+
+.tarjeta-login p.subtitulo {
+  text-align: center;
+  margin: 0 0 22px;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.tarjeta-login .campo { margin-bottom: 14px; }
+
+.tarjeta-login label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  margin-bottom: 6px;
+}
+
+.tarjeta-login input {
+  width: 100%;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 10px 12px;
+  font-size: 0.92rem;
+  font-family: var(--font-body);
+  color: var(--ink);
+}
+
+@media (max-width: 900px) {
+  .layout-ficha { grid-template-columns: 1fr; }
+  .rejilla-campos { grid-template-columns: 1fr; }
+  .formulario-actos { grid-template-columns: 1fr; }
+}

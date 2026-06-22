@@ -1,40 +1,52 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block titulo %}Fichas de Personal{% endblock %}</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="stylesheet" href="{{ url_for('static', filename='estilo.css') }}">
-</head>
-<body>
-  <div class="contenedor">
-    {% if session.usuario_id %}
-      <div class="barra-superior">
-        <nav>
-          <a class="enlace-nav {{ 'activo' if request.path == '/dashboard' else '' }}" href="{{ url_for('dashboard') }}">Dashboard</a>
-          <a class="enlace-nav {{ 'activo' if request.path.startswith('/fichas') else '' }}" href="{{ url_for('fichas_listado') }}">Fichas de Personal</a>
-        </nav>
-        <div class="acciones-pagina">
-          <span class="boton-chica" style="color:var(--ink-soft); font-size:0.8rem;">{{ session.usuario_nombre }}</span>
-          <a class="boton boton-fantasma" href="{{ url_for('logout') }}">Cerrar sesión</a>
-        </div>
-      </div>
-    {% endif %}
-
-    {% with mensajes = get_flashed_messages(with_categories=true) %}
-      {% if mensajes %}
-        <div class="mensajes">
-          {% for categoria, texto in mensajes %}
-            <div class="mensaje {{ 'error' if categoria == 'error' else 'success' }}">{{ texto }}</div>
-          {% endfor %}
-        </div>
-      {% endif %}
-    {% endwith %}
-
-    {% block contenido %}{% endblock %}
+{% extends "base.html" %}
+{% block titulo %}Hojas de Vida{% endblock %}
+{% block contenido %}
+<div class="timbre-modulo">
+  <div>
+    <p class="titulo-principal">Hojas de Vida de Personal</p>
+    <p class="subtitulo">{{ fichas|length }} persona(s) registrada(s)</p>
   </div>
+  <div class="acciones-pagina">
+    <a class="boton boton-secundario" href="{{ url_for('fichas_exportar') }}">Exportar Excel</a>
+    <a class="boton boton-secundario" href="{{ url_for('fichas_importar_get') }}">Importar Hoja de Vida</a>
+    <a class="boton boton-fantasma" href="{{ url_for('fichas_papelera') }}">Papelera{% if en_papelera %} ({{ en_papelera }}){% endif %}</a>
+    <a class="boton boton-primario" href="{{ url_for('ficha_nueva') }}">+ Nueva hoja de vida</a>
+  </div>
+</div>
 
-  <script src="{{ url_for('static', filename='rut.js') }}"></script>
-</body>
-</html>
+<form method="get" class="buscador-rut">
+  <input type="text" name="q" value="{{ q }}" placeholder="Buscar por nombre o RUT...">
+  <button class="boton boton-secundario" type="submit">Buscar</button>
+  {% if q %}<a class="boton boton-fantasma" href="{{ url_for('fichas_listado') }}">Ver todas</a>{% endif %}
+</form>
+
+<div class="tabla-actos-contenedor">
+  <table class="tabla-actos">
+    <thead>
+      <tr>
+        <th>N°</th><th></th><th>Nombre</th><th>RUT</th><th>Cargo actual</th><th>Unidad</th><th>Documentos</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in fichas %}
+      <tr onclick="window.location.href='{{ url_for('ficha_detalle', fid=f.id) }}'">
+        <td style="font-family:var(--font-mono);color:var(--ink-soft);font-size:.78rem">{{ f.numero_ficha or '—' }}</td>
+        <td style="width:1%">
+          <div class="avatar-mini">
+            {% if f.foto %}<img src="{{ url_for('static', filename='uploads/'+f.foto) }}" alt="" style="width:34px;height:34px;border-radius:50%;object-fit:cover">
+            {% else %}{{ f.nombre[0]|upper }}{% endif %}
+          </div>
+        </td>
+        <td>{{ f.nombre }}</td>
+        <td style="font-family:var(--font-mono)">{{ f.rut }}</td>
+        <td>{{ f.calidad_actual or '—' }}</td>
+        <td>{{ f.unidad_actual or '—' }}</td>
+        <td><span class="badge-conteo">{{ f.total_docs }}</span></td>
+      </tr>
+      {% else %}
+      <tr class="fila-vacia"><td colspan="7">{% if q %}Sin resultados para "{{ q }}".{% else %}No hay hojas de vida registradas.{% endif %}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

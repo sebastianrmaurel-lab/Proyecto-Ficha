@@ -1,41 +1,25 @@
 {% extends "base.html" %}
 
-{% block titulo %}Papelera{% endblock %}
+{% block titulo %}Iniciar sesión{% endblock %}
 
 {% block contenido %}
-  <a class="boton boton-fantasma" href="{{ url_for('fichas_listado') }}" style="margin-bottom:16px;">← Volver al listado</a>
+  <div class="pantalla-login">
+    <div class="tarjeta-login">
+      <span class="numero-ficha">SISTEMA DE FICHAS</span>
+      <h1>Panel admin</h1>
+      <p class="subtitulo">Inicia sesión para continuar</p>
 
-  <div class="timbre-modulo">
-    <div>
-      <p class="titulo-principal">Papelera</p>
-      <p class="subtitulo">Fichas eliminadas — puedes restaurarlas o borrarlas definitivamente</p>
+      <form method="post">
+        <div class="campo">
+          <label for="usuario">Usuario</label>
+          <input type="text" id="usuario" name="usuario" required autofocus>
+        </div>
+        <div class="campo">
+          <label for="clave">Contraseña</label>
+          <input type="password" id="clave" name="clave" required>
+        </div>
+        <button class="boton boton-primario" type="submit" style="width:100%;">Entrar</button>
+      </form>
     </div>
-  </div>
-
-  <div class="tabla-actos-contenedor">
-    <table class="tabla-actos">
-      <thead>
-        <tr><th>Nombre</th><th>RUT</th><th>Jerarquía</th><th></th></tr>
-      </thead>
-      <tbody>
-        {% for ficha in fichas %}
-          <tr style="cursor:default;">
-            <td>{{ ficha.nombre }}</td>
-            <td>{{ ficha.rut }}</td>
-            <td>{{ ficha.jerarquia or '—' }}</td>
-            <td style="white-space:nowrap;">
-              <form method="post" action="{{ url_for('ficha_restaurar', ficha_id=ficha.id) }}" style="display:inline;">
-                <button class="boton boton-secundario boton-chica" type="submit">Restaurar</button>
-              </form>
-              <form method="post" action="{{ url_for('ficha_eliminar_definitivo', ficha_id=ficha.id) }}" style="display:inline;" onsubmit="return confirm('¿Eliminar definitivamente esta ficha junto con sus actos y asignaciones familiares? Esta acción no se puede deshacer.');">
-                <button class="boton boton-peligro boton-chica" type="submit">Eliminar definitivo</button>
-              </form>
-            </td>
-          </tr>
-        {% else %}
-          <tr class="fila-vacia"><td colspan="4">La papelera está vacía.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
   </div>
 {% endblock %}
