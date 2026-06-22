@@ -10,7 +10,7 @@
     <p style="font-family:var(--font-display);font-size:1.1rem;font-weight:700;margin:0">{{ ficha.nombre if ficha else 'Nueva Hoja de Vida' }}</p>
     <p style="font-size:.78rem;opacity:.75;margin:2px 0 0">Hoja de Vida de Personal</p>
   </div>
-  {% if ficha %}<span class="numero-ficha">ID {{ ficha.id }}</span>{% endif %}
+  {% if ficha %}<span class="numero-ficha">FICHA N.° {{ ficha.numero_ficha or ficha.id }}</span>{% endif %}
 </div>
 
 {# ══ FORM DATOS PERSONALES ══ #}
@@ -41,7 +41,7 @@
 
   {# Datos adicionales #}
   <div style="background:var(--surface);border:1px solid var(--border);border-top:none;padding:14px 22px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px 20px">
-    {% for name,label in [('fecha_nacimiento','Fecha Nacimiento'),('estado_civil','Estado Civil'),('sexo','Sexo'),('titulo','Título'),('grado_academico','Grado Académico'),('jerarquia','Jerarquía'),('telefono','Teléfono'),('direccion','Dirección'),('link','Link')] %}
+    {% for name,label in [('fecha_nacimiento','Fecha Nacimiento'),('estado_civil','Estado Civil'),('sexo','Sexo'),('titulo','Título'),('grado_academico','Grado Académico'),('jerarquia','Jerarquía'),('telefono','Teléfono'),('direccion','Dirección')] %}
     <div class="campo">
       <label style="font-size:.73rem;font-weight:600;color:var(--ink-soft)">{{ label }}</label>
       <input type="text" name="{{ name }}" value="{{ ficha[name] if ficha and ficha[name] else '' }}" style="background:var(--surface-muted);border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:.85rem;width:100%">

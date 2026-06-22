@@ -505,6 +505,7 @@ def init_db():
 
     db.execute('''CREATE TABLE IF NOT EXISTS fichas (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        numero_ficha INTEGER,
         nombre TEXT NOT NULL,
         rut TEXT NOT NULL UNIQUE,
         rol TEXT, pasaporte TEXT, pais_nacionalidad TEXT,
@@ -737,11 +738,18 @@ def ficha_nueva():
         if db.execute('SELECT id FROM fichas WHERE rut=?',(d['rut'],)).fetchone():
             flash('Ya existe una ficha con ese RUT.','error'); return redirect(url_for('ficha_nueva'))
         foto = guardar_foto('foto')
-        cur  = db.execute('''INSERT INTO fichas (nombre,rut,rol,pasaporte,pais_nacionalidad,
+
+        # Calcular el menor número correlativo disponible (rellena huecos)
+        numeros_usados = {r[0] for r in db.execute('SELECT numero_ficha FROM fichas WHERE numero_ficha IS NOT NULL')}
+        numero_ficha = 1
+        while numero_ficha in numeros_usados:
+            numero_ficha += 1
+
+        cur  = db.execute('''INSERT INTO fichas (numero_ficha,nombre,rut,rol,pasaporte,pais_nacionalidad,
                              region,comuna,ciudad,correo,titulo,grado_academico,jerarquia,
                              direccion,observaciones,fecha_nacimiento,estado_civil,telefono,sexo,link,foto)
-                             VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
-                          tuple(d[k] for k in ['nombre','rut','rol','pasaporte','pais_nacionalidad',
+                             VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                          (numero_ficha,) + tuple(d[k] for k in ['nombre','rut','rol','pasaporte','pais_nacionalidad',
                                 'region','comuna','ciudad','correo','titulo','grado_academico','jerarquia',
                                 'direccion','observaciones','fecha_nacimiento','estado_civil','telefono','sexo','link']) + (foto,))
         db.commit()
@@ -1090,9 +1098,12 @@ def fichas_confirmar_importacion():
             omitidas.append(f'{nombre} (RUT inválido)'); continue
         if db.execute('SELECT id FROM fichas WHERE rut=?',(rut,)).fetchone():
             omitidas.append(f'{nombre} (RUT ya existe)'); continue
-        cur = db.execute('''INSERT INTO fichas (nombre,rut,titulo,direccion,fecha_nacimiento,estado_civil,telefono,correo,activo)
-                            VALUES(?,?,?,?,?,?,?,?,1)''',
-                         (nombre,rut,request.form.get(f'titulo_{i}',''),
+        numeros_usados = {r[0] for r in db.execute('SELECT numero_ficha FROM fichas WHERE numero_ficha IS NOT NULL')}
+        num_ficha = 1
+        while num_ficha in numeros_usados: num_ficha += 1
+        cur = db.execute('''INSERT INTO fichas (numero_ficha,nombre,rut,titulo,direccion,fecha_nacimiento,estado_civil,telefono,correo,activo)
+                            VALUES(?,?,?,?,?,?,?,?,?,1)''',
+                         (num_ficha,nombre,rut,request.form.get(f'titulo_{i}',''),
                           request.form.get(f'direccion_{i}',''),request.form.get(f'fecha_nacimiento_{i}',''),
                           request.form.get(f'estado_civil_{i}',''),request.form.get(f'telefono_{i}',''),
                           request.form.get(f'correo_{i}','')))
