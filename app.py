@@ -1191,7 +1191,7 @@ def confirmar_importacion_secciones():
 
         # separar campos base de extras
         datos = json.loads(request.form.get(f'r_{i}_datos', '{}'))
-        base  = {k: datos.pop(k, '') for k in list(CAMPOS_BASE_HV)}
+        base  = {k: datos.pop(k, '') for k in list(CAMPOS_BASE)}
         # quitar rut y seccion de extra
         datos.pop('rut', None); datos.pop('seccion', None)
         datos.pop('run', None)

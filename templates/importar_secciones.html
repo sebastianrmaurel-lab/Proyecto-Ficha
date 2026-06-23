@@ -80,7 +80,7 @@
             {% set i = ns.idx %}
             <input type="hidden" name="r_{{ i }}_rut"     value="{{ fila.rut }}">
             <input type="hidden" name="r_{{ i }}_seccion" value="{{ fila.seccion }}">
-            <input type="hidden" name="r_{{ i }}_datos"   value="{{ fila.datos | tojson }}">
+            <input type="hidden" name="r_{{ i }}_datos"   value='{{ fila.datos | tojson }}'>
             <tr>
               <td>{{ loop.index }}</td>
               {% for k, v in fila.datos.items() %}
