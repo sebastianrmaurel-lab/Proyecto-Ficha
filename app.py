@@ -933,44 +933,46 @@ def catalogo_eliminar(cat, item_id):
 # ─────────────────────────────────────────────
 #  IMPORTAR EXCEL
 # ─────────────────────────────────────────────
+# Alias de encabezados para importar fichas — acepta cualquier variante
+ALIAS_FICHAS = {
+    'run (rut)':'rut','run':'rut','rut':'rut',
+    'rol':'rol','pasaporte':'pasaporte',
+    'país nacionalidad':'pais_nacionalidad','pais nacionalidad':'pais_nacionalidad','pais':'pais_nacionalidad',
+    'nombre completo':'nombre','nombre':'nombre',
+    'correo':'correo','correo electrónico':'correo','email':'correo',
+    'región':'region','region':'region',
+    'comuna':'comuna','ciudad':'ciudad',
+    'fecha nacimiento':'fecha_nacimiento','fechanac':'fecha_nacimiento','fecha nac':'fecha_nacimiento',
+    'estado civil':'estado_civil','estadocivil':'estado_civil',
+    'jerarquía':'jerarquia','jerarquia':'jerarquia',
+    'grado académico':'grado_academico','grado academico':'grado_academico','grado':'grado_academico',
+    'título':'titulo','titulo':'titulo',
+    'teléfono':'telefono','telefono':'telefono','tel':'telefono','fono':'telefono',
+    'dirección':'direccion','direccion':'direccion','dir':'direccion',
+    'observaciones':'observaciones','obs':'observaciones',
+}
+
 def _leer_excel(stream):
     from openpyxl import load_workbook
     wb = load_workbook(stream, data_only=True); ws = wb.active
-    enc = [str(c.value).strip() if c.value else '' for c in next(ws.iter_rows(min_row=1,max_row=1))]
-
-    def col(fila, nombre):
-        for i,e in enumerate(enc):
-            if e and nombre.lower() in e.lower(): return fila[i]
-        return None
 
     def s(v):
         if v is None: return ''
-        if hasattr(v,'strftime'): return v.strftime('%Y-%m-%d')
+        if hasattr(v, 'strftime'): return v.strftime('%Y-%m-%d')
         return str(v).strip()
+
+    # leer encabezados y mapear a campos internos usando alias
+    primera = list(ws.iter_rows(min_row=1, max_row=1, values_only=True))[0]
+    enc = [ALIAS_FICHAS.get(str(c).strip().lower(), str(c).strip().lower()) if c else '' for c in primera]
 
     personas = []
     for fila in ws.iter_rows(min_row=2, values_only=True):
         if not any(c is not None for c in fila): continue
-        persona = {
-            'rut':              s(col(fila,'Run')),
-            'rol':              s(col(fila,'ROL')),
-            'pasaporte':        s(col(fila,'Pasaporte')),
-            'pais_nacionalidad':s(col(fila,'País')),
-            'nombre':           s(col(fila,'Nombre')),
-            'correo':           s(col(fila,'Correo')),
-            'region':           s(col(fila,'Región')),
-            'comuna':           s(col(fila,'Comuna')),
-            'ciudad':           s(col(fila,'Ciudad')),
-            'fecha_nacimiento': s(col(fila,'Fecha Nacimiento')),
-            'estado_civil':     s(col(fila,'Estado Civil')),
-            'jerarquia':        s(col(fila,'Jerarquía')),
-            'grado_academico':  s(col(fila,'Grado')),
-            'titulo':           s(col(fila,'Título')),
-            'telefono':         s(col(fila,'Teléfono')),
-            'direccion':        s(col(fila,'Dirección')),
-            'observaciones':    s(col(fila,'Observaciones')),
-        }
-        if persona['nombre'] or persona['rut']:
+        persona = {}
+        for i, clave in enumerate(enc):
+            if clave and i < len(fila):
+                persona[clave] = s(fila[i])
+        if persona.get('nombre') or persona.get('rut'):
             personas.append(persona)
     return personas
 
@@ -1035,29 +1037,63 @@ def fichas_confirmar_importacion():
 
 
 
+
 # ─────────────────────────────────────────────
 #  IMPORTAR SECCIONES DESDE EXCEL
 # ─────────────────────────────────────────────
-
-SECCIONES_EXCEL = {
-    'Designaciones':               ('designaciones',          ['fecha_desde','fecha_hasta','calidad','horas'],                                    {'tipo_documento':'Tipo Documento','numero_documento':'N° Documento','fecha_documento':'Fecha Documento','servicio_documento':'Servicio','estado_tramite':'Estado Trámite','fecha_desde':'Fecha Desde','fecha_hasta':'Fecha Hasta','calidad':'Calidad','horas':'Horas'}),
-    'Cese de Funciones':           ('cese_funciones',         ['tipo_cese','causal_cese','horas_cesadas','fecha_desde'],                          {'tipo_documento':'Tipo Documento','numero_documento':'N° Documento','fecha_documento':'Fecha Documento','servicio_documento':'Servicio','estado_tramite':'Estado Trámite','tipo_cese':'Tipo Cese','causal_cese':'Causal del Cese','horas_cesadas':'Horas Cesadas','fecha_desde':'Fecha Desde'}),
-    'Responsabilidad Administrativa':('responsabilidad_administrativa',['materia','conclusion'],                                                  {'tipo_documento':'Tipo Documento','numero_documento':'N° Documento','fecha_documento':'Fecha Documento','servicio_documento':'Servicio','estado_tramite':'Estado Trámite','materia':'Materia','conclusion':'Conclusión'}),
-    'Inhabilidades':               ('inhabilidades',          ['materia','fecha_desde','tiempo_inhabilidad'],                                     {'tipo_documento':'Tipo Documento','numero_documento':'N° Documento','fecha_documento':'Fecha Documento','servicio_documento':'Servicio','estado_tramite':'Estado Trámite','materia':'Materia','fecha_desde':'Fecha Desde','tiempo_inhabilidad':'Tiempo Inhabilidad'}),
-    'Estudios':                    ('estudios',               ['nivel_estudio','titulo_carrera','fecha_otorgamiento','fecha_convalidacion','institucion'],{'tipo_documento':'Tipo Documento','numero_documento':'N° Documento','fecha_documento':'Fecha Documento','servicio_documento':'Servicio','estado_tramite':'Estado Trámite','nivel_estudio':'Nivel de Estudio','titulo_carrera':'Título / Carrera','fecha_otorgamiento':'Fecha Otorgamiento','fecha_convalidacion':'Fecha Convalidación','institucion':'Institución'}),
-    'Contrato a Honorarios':       ('contrato_honorarios',    ['fecha_desde','labor','modalidad','fecha_hasta'],                                  {'tipo_documento':'Tipo Documento','numero_documento':'N° Documento','fecha_documento':'Fecha Documento','servicio_documento':'Servicio','estado_tramite':'Estado Trámite','fecha_desde':'Fecha Desde','labor':'Labor','modalidad':'Modalidad','fecha_hasta':'Fecha Hasta'}),
-    'Licencias Médicas':           ('licencias_medicas',      ['fecha_desde','fecha_hasta','dias'],                                               {'tipo_documento':'Tipo Documento','numero_documento':'N° Documento','fecha_documento':'Fecha Documento','servicio_documento':'Servicio','estado_tramite':'Estado Trámite','fecha_desde':'Fecha Desde','fecha_hasta':'Fecha Hasta','dias':'Días'}),
-    'Permisos y Feriados':         ('permisos_feriados',      ['fecha_desde','fecha_hasta','dias','tipo_informacion'],                            {'tipo_documento':'Tipo Documento','numero_documento':'N° Documento','fecha_documento':'Fecha Documento','servicio_documento':'Servicio','estado_tramite':'Estado Trámite','fecha_desde':'Fecha Desde','fecha_hasta':'Fecha Hasta','dias':'Días','tipo_informacion':'Tipo Información'}),
-    'Comisiones y Becas':          ('comisiones_becas',       ['materia','fecha_desde','fecha_hasta'],                                            {'tipo_documento':'Tipo Documento','numero_documento':'N° Documento','fecha_documento':'Fecha Documento','servicio_documento':'Servicio','estado_tramite':'Estado Trámite','materia':'Materia','fecha_desde':'Fecha Desde','fecha_hasta':'Fecha Hasta'}),
-    'Cargas Familiares':           ('cargas_familiares',      ['tipo_carga','nombre_carga','fecha_hasta'],                                        {'tipo_documento':'Tipo Documento','numero_documento':'N° Documento','fecha_documento':'Fecha Documento','servicio_documento':'Servicio','estado_tramite':'Estado Trámite','tipo_carga':'Tipo Carga','nombre_carga':'Nombre','fecha_hasta':'Fecha Hasta'}),
-    'Calificación':                ('calificacion',           ['lista','puntaje','fecha_inicio','fecha_termino'],                                 {'tipo_documento':'Tipo Documento','numero_documento':'N° Documento','fecha_documento':'Fecha Documento','servicio_documento':'Servicio','estado_tramite':'Estado Trámite','lista':'Lista','puntaje':'Puntaje','fecha_inicio':'Fecha Inicio','fecha_termino':'Fecha Término'}),
-    'Destinaciones':               ('destinaciones',          ['materia_ingreso','fecha_desde'],                                                  {'tipo_documento':'Tipo Documento','numero_documento':'N° Documento','fecha_documento':'Fecha Documento','servicio_documento':'Servicio','estado_tramite':'Estado Trámite','materia_ingreso':'Materia Ingreso','fecha_desde':'Fecha Desde'}),
-    'Ceses':                       ('ceses',                  ['tipo_cese','motivo','fecha_termino'],                                             {'tipo_documento':'Tipo Documento','numero_documento':'N° Documento','fecha_documento':'Fecha Documento','servicio_documento':'Servicio','estado_tramite':'Estado Trámite','tipo_cese':'Tipo','motivo':'Motivo','fecha_termino':'Fecha Término'}),
-    'Anotaciones':                 ('anotaciones',            ['tipo_anotacion','fecha_anotacion','run_responsable','nombre_responsable'],         {'tipo_documento':'Tipo Documento','numero_documento':'N° Documento','fecha_documento':'Fecha Documento','servicio_documento':'Servicio','estado_tramite':'Estado Trámite','tipo_anotacion':'Tipo','fecha_anotacion':'Fecha','run_responsable':'Run Responsable','nombre_responsable':'Nombre Responsable'}),
-    'Declaraciones de Patrimonio': ('declaraciones_patrimonio',['materia_declaracion','fecha_declaracion','fecha_proxima'],                        {'tipo_documento':'Tipo Documento','numero_documento':'N° Documento','fecha_documento':'Fecha Documento','servicio_documento':'Servicio','estado_tramite':'Estado Trámite','materia_declaracion':'Materia Declaración','fecha_declaracion':'Fecha Declaración','fecha_proxima':'Fecha Próxima'}),
-    'Modifica Rectifica':          ('modifica_rectifica',     ['materia_documento','modifica_a','documento_n','materia_relacionada'],              {'tipo_documento':'Tipo Documento','numero_documento':'N° Documento','fecha_documento':'Fecha Documento','servicio_documento':'Servicio','estado_tramite':'Estado Trámite','materia_documento':'Materia','modifica_a':'Modifica a','documento_n':'Documento N','materia_relacionada':'Materia Relacionada'}),
+# Mapeo nombre de hoja → seccion interna
+NOMBRE_A_SECCION = {
+    'designaciones':                  'designaciones',
+    'cese de funciones':              'cese_funciones',
+    'responsabilidad administrativa': 'responsabilidad_administrativa',
+    'inhabilidades':                  'inhabilidades',
+    'estudios':                       'estudios',
+    'contrato a honorarios':          'contrato_honorarios',
+    'licencias medicas':              'licencias_medicas',
+    'licencias médicas':              'licencias_medicas',
+    'permisos y feriados':            'permisos_feriados',
+    'comisiones y becas':             'comisiones_becas',
+    'cargas familiares':              'cargas_familiares',
+    'calificacion':                   'calificacion',
+    'calificación':                   'calificacion',
+    'destinaciones':                  'destinaciones',
+    'ceses':                          'ceses',
+    'anotaciones':                    'anotaciones',
+    'declaraciones de patrimonio':    'declaraciones_patrimonio',
+    'modifica rectifica':             'modifica_rectifica',
 }
 
+# Campos que van en la tabla principal (el resto va a datos_extra JSON)
+CAMPOS_BASE_HV = {'tipo_documento', 'numero_documento', 'fecha_documento',
+                  'servicio_documento', 'estado_tramite'}
+
+# Mapeo flexible de encabezados comunes a nombres internos
+ALIAS_ENCABEZADOS = {
+    'run':                  'rut',
+    'rut':                  'rut',
+    'tipo documento':       'tipo_documento',
+    'tipo doc':             'tipo_documento',
+    'n° documento':         'numero_documento',
+    'numero documento':     'numero_documento',
+    'nro documento':        'numero_documento',
+    'n documento':          'numero_documento',
+    'fecha documento':      'fecha_documento',
+    'servicio':             'servicio_documento',
+    'servicio documento':   'servicio_documento',
+    'servicio desempeño':   'servicio_documento',
+    'estado tramite':       'estado_tramite',
+    'estado trámite':       'estado_tramite',
+}
+
+def _normalizar_enc(nombre):
+    """Convierte encabezado a clave interna si tiene alias, si no lo normaliza."""
+    n = nombre.lower().strip()
+    if n in ALIAS_ENCABEZADOS:
+        return ALIAS_ENCABEZADOS[n]
+    # normalización básica: minúsculas, sin tildes, guión bajo por espacio
+    for a, b in [('á','a'),('é','e'),('í','i'),('ó','o'),('ú','u'),('ñ','n'),(' ','_'),('/','_'),('-','_')]:
+        n = n.replace(a, b)
+    return n.strip('_')
 
 def _leer_secciones_excel(stream):
     from openpyxl import load_workbook
@@ -1070,31 +1106,39 @@ def _leer_secciones_excel(stream):
 
     resultado = {}
     for nombre_hoja in wb.sheetnames:
-        cfg = None
-        for k, v in SECCIONES_EXCEL.items():
-            if k.lower() in nombre_hoja.lower() or nombre_hoja.lower() in k.lower():
-                cfg = v; break
-        if not cfg: continue
+        # buscar qué sección corresponde a esta hoja
+        seccion_id = None
+        nombre_lower = nombre_hoja.lower().strip()
+        for k, v in NOMBRE_A_SECCION.items():
+            if k in nombre_lower or nombre_lower in k:
+                seccion_id = v; break
+        if not seccion_id:
+            continue
 
-        seccion_id, campos_extra, cols = cfg
         ws = wb[nombre_hoja]
-        enc = [str(c.value).strip() if c.value else '' for c in next(ws.iter_rows(min_row=1, max_row=1))]
+        filas_iter = ws.iter_rows(min_row=1, values_only=True)
 
-        def col(fila, label):
-            for i, e in enumerate(enc):
-                if e and label.lower() in e.lower(): return fila[i]
-            return None
+        # primera fila = encabezados
+        primera = next(filas_iter, None)
+        if not primera: continue
+        enc = [_normalizar_enc(str(c).strip()) if c else '' for c in primera]
 
         filas = []
-        for fila in ws.iter_rows(min_row=2, values_only=True):
+        for fila in filas_iter:
             if not any(c is not None for c in fila): continue
-            rut = s(col(fila, 'RUT')) or s(col(fila, 'Run'))
+
+            # mapear cada celda a su clave normalizada
+            registro = {}
+            for i, clave in enumerate(enc):
+                if not clave: continue
+                registro[clave] = s(fila[i] if i < len(fila) else None)
+
+            # el RUT puede estar como 'rut' o 'run'
+            rut = registro.get('rut') or registro.get('run') or ''
             if not rut: continue
-            registro = {'rut': rut, 'seccion': seccion_id}
-            for campo, label in cols.items():
-                registro[campo] = s(col(fila, label))
-            registro['_extra_keys'] = campos_extra
-            filas.append(registro)
+            registro['rut'] = rut
+
+            filas.append({'seccion': seccion_id, 'rut': rut, 'datos': registro})
 
         if filas:
             resultado[nombre_hoja] = {'seccion_id': seccion_id, 'filas': filas}
@@ -1120,7 +1164,7 @@ def importar_secciones_post():
         resultado = _leer_secciones_excel(archivo.stream)
         if not resultado:
             return render_template('importar_secciones.html', resultado=None,
-                                   error='No se encontraron hojas reconocidas. Verifica que los nombres de las hojas coincidan con las secciones (ej: Designaciones, Estudios, Licencias Médicas...).')
+                error='No se encontraron hojas reconocidas. Verifica que los nombres coincidan (ej: Designaciones, Estudios...)')
         return render_template('importar_secciones.html', resultado=resultado, error=None)
     except Exception as e:
         return render_template('importar_secciones.html', resultado=None, error=f'Error leyendo el archivo: {e}')
@@ -1129,7 +1173,7 @@ def importar_secciones_post():
 @app.route('/fichas/confirmar-importacion-secciones', methods=['POST'])
 @login_required
 def confirmar_importacion_secciones():
-    db = get_db()
+    db    = get_db()
     total = 0
     no_encontrados = []
     cantidad = int(request.form.get('cantidad_registros', 0))
@@ -1145,25 +1189,30 @@ def confirmar_importacion_secciones():
                 no_encontrados.append(rut)
             continue
 
-        base_keys = ['tipo_documento','numero_documento','fecha_documento','servicio_documento','estado_tramite']
-        base  = {k: request.form.get(f'r_{i}_{k}', '') for k in base_keys}
-        extra = json.loads(request.form.get(f'r_{i}_extra', '{}'))
+        # separar campos base de extras
+        datos = json.loads(request.form.get(f'r_{i}_datos', '{}'))
+        base  = {k: datos.pop(k, '') for k in list(CAMPOS_BASE_HV)}
+        # quitar rut y seccion de extra
+        datos.pop('rut', None); datos.pop('seccion', None)
+        datos.pop('run', None)
 
         db.execute("""INSERT INTO documentos_hv
             (ficha_id, seccion, tipo_documento, numero_documento, fecha_documento,
              servicio_documento, estado_tramite, datos_extra)
             VALUES (?,?,?,?,?,?,?,?)""",
-            (ficha['id'], seccion, base['tipo_documento'], base['numero_documento'],
-             base['fecha_documento'], base['servicio_documento'],
-             base['estado_tramite'], json.dumps(extra)))
+            (ficha['id'], seccion,
+             base.get('tipo_documento',''), base.get('numero_documento',''),
+             base.get('fecha_documento',''), base.get('servicio_documento',''),
+             base.get('estado_tramite',''), json.dumps(datos)))
         total += 1
 
     db.commit()
     msg = f'{total} registro(s) importado(s) correctamente.'
     if no_encontrados:
-        msg += f' RUTs no encontrados en el sistema: {", ".join(no_encontrados)}'
+        msg += f' RUTs no encontrados: {", ".join(no_encontrados)}'
     flash(msg, 'error' if no_encontrados else 'success')
     return redirect(url_for('fichas_listado'))
+
 
 # ─────────────────────────────────────────────
 #  ARRANQUE
