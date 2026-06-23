@@ -7,7 +7,7 @@ from flask import (Flask, render_template, request, redirect, url_for,
                    flash, g, session, send_file, jsonify)
 from werkzeug.security import generate_password_hash, check_password_hash
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.styles import Font, PatternFill, Alignment, Alignment
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.lib.units import cm
@@ -657,25 +657,133 @@ def fichas_listado():
     en_papelera = db.execute('SELECT COUNT(*) FROM fichas WHERE activo=0').fetchone()[0]
     return render_template('listado.html', fichas=fichas, q=q, en_papelera=en_papelera)
 
-@app.route('/fichas/exportar')
+@app.route('/fichas/exportar-fichas')
 @login_required
-def fichas_exportar():
+def fichas_exportar_fichas():
     db = get_db()
     fichas = db.execute('SELECT * FROM fichas WHERE activo=1 ORDER BY nombre COLLATE NOCASE').fetchall()
-    wb = Workbook(); hoja = wb.active; hoja.title='Fichas de Personal'
-    enc = ['Nombre','RUT','Correo','Título','Grado Académico','Jerarquía',
-           'Dirección','Teléfono','Fecha Nacimiento','Estado Civil','Región','Comuna']
-    hoja.append(enc)
-    for c in hoja[1]:
-        c.font=Font(name='Arial',bold=True,color='FFFFFF')
-        c.fill=PatternFill('solid',start_color='1C3D5A')
+    wb = Workbook(); ws = wb.active; ws.title = 'Hojas de Vida'
+
+    enc = ['Run (RUT)','ROL','Pasaporte','País Nacionalidad','Nombre Completo','Correo',
+           'Región','Comuna','Ciudad','Fecha Nacimiento','Estado Civil',
+           'Jerarquía','Grado Académico','Título','Teléfono','Dirección','Observaciones']
+    ws.append(enc)
+    for c in ws[1]:
+        c.font = Font(name='Arial', bold=True, color='FFFFFF')
+        c.fill = PatternFill('solid', start_color='1C3D5A')
+        c.alignment = Alignment(horizontal='left')
+
     for f in fichas:
-        hoja.append([f['nombre'],f['rut'],f['correo'],f['titulo'],f['grado_academico'],
-                     f['jerarquia'],f['direccion'],f['telefono'],f['fecha_nacimiento'],
-                     f['estado_civil'],f['region'],f['comuna']])
+        ws.append([f['rut'], f['rol'], f['pasaporte'], f['pais_nacionalidad'],
+                   f['nombre'], f['correo'], f['region'], f['comuna'], f['ciudad'],
+                   f['fecha_nacimiento'], f['estado_civil'], f['jerarquia'],
+                   f['grado_academico'], f['titulo'], f['telefono'],
+                   f['direccion'], f['observaciones']])
+
+    for col in ws.columns:
+        ws.column_dimensions[col[0].column_letter].width = max(
+            max(len(str(c.value or '')) for c in col) + 3, 12)
+
     buf = BytesIO(); wb.save(buf); buf.seek(0)
-    return send_file(buf, as_attachment=True, download_name='fichas.xlsx',
+    return send_file(buf, as_attachment=True, download_name='hojas_de_vida.xlsx',
                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
+@app.route('/fichas/exportar-actos')
+@login_required
+def fichas_exportar_actos():
+    db  = get_db()
+    wb  = Workbook()
+    primera = True
+
+    # nombres de display para cada sección
+    nombres_display = {
+        'designaciones':                  'Designaciones',
+        'cese_funciones':                 'Cese de Funciones',
+        'responsabilidad_administrativa': 'Responsabilidad Administrativa',
+        'inhabilidades':                  'Inhabilidades',
+        'estudios':                       'Estudios',
+        'contrato_honorarios':            'Contrato a Honorarios',
+        'licencias_medicas':              'Licencias Médicas',
+        'permisos_feriados':              'Permisos y Feriados',
+        'comisiones_becas':               'Comisiones y Becas',
+        'cargas_familiares':              'Cargas Familiares',
+        'calificacion':                   'Calificación',
+        'destinaciones':                  'Destinaciones',
+        'ceses':                          'Ceses',
+        'anotaciones':                    'Anotaciones',
+        'declaraciones_patrimonio':       'Declaraciones de Patrimonio',
+        'modifica_rectifica':             'Modifica Rectifica',
+    }
+
+    # obtener secciones que tienen datos
+    secciones_con_datos = [r[0] for r in db.execute(
+        'SELECT DISTINCT seccion FROM documentos_hv ORDER BY seccion').fetchall()]
+
+    if not secciones_con_datos:
+        # crear hoja vacía si no hay datos
+        ws = wb.active; ws.title = 'Sin datos'
+        ws.append(['No hay actos administrativos registrados.'])
+        buf = BytesIO(); wb.save(buf); buf.seek(0)
+        return send_file(buf, as_attachment=True, download_name='actos_administrativos.xlsx',
+                         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+    for seccion in secciones_con_datos:
+        nombre_hoja = nombres_display.get(seccion, seccion)[:31]  # Excel limita a 31 chars
+
+        docs = db.execute('''
+            SELECT f.rut, f.nombre, d.*
+            FROM documentos_hv d
+            JOIN fichas f ON f.id = d.ficha_id
+            WHERE d.seccion = ?
+            ORDER BY f.nombre COLLATE NOCASE, d.fecha_documento
+        ''', (seccion,)).fetchall()
+
+        if not docs: continue
+
+        # construir encabezados dinámicos: RUT + Nombre + campos base + claves de datos_extra
+        claves_extra = set()
+        for doc in docs:
+            try:
+                extra = json.loads(doc['datos_extra'] or '{}')
+                claves_extra.update(extra.keys())
+            except Exception:
+                pass
+        claves_extra = sorted(claves_extra)
+
+        enc = ['RUT', 'Nombre', 'Tipo Documento', 'N° Documento', 'Fecha Documento',
+               'Servicio Documento', 'Estado Trámite'] + [k.replace('_',' ').title() for k in claves_extra]
+
+        if primera:
+            ws = wb.active; ws.title = nombre_hoja; primera = False
+        else:
+            ws = wb.create_sheet(nombre_hoja)
+
+        ws.append(enc)
+        for c in ws[1]:
+            c.font = Font(name='Arial', bold=True, color='FFFFFF')
+            c.fill = PatternFill('solid', start_color='1C3D5A')
+            c.alignment = Alignment(horizontal='left')
+
+        for doc in docs:
+            try:
+                extra = json.loads(doc['datos_extra'] or '{}')
+            except Exception:
+                extra = {}
+            fila = [doc['rut'], doc['nombre'],
+                    doc['tipo_documento'], doc['numero_documento'],
+                    doc['fecha_documento'], doc['servicio_documento'], doc['estado_tramite']]
+            fila += [extra.get(k, '') for k in claves_extra]
+            ws.append(fila)
+
+        for col in ws.columns:
+            ws.column_dimensions[col[0].column_letter].width = max(
+                max(len(str(c.value or '')) for c in col) + 3, 12)
+
+    buf = BytesIO(); wb.save(buf); buf.seek(0)
+    return send_file(buf, as_attachment=True, download_name='actos_administrativos.xlsx',
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
 
 @app.route('/fichas/papelera')
 @login_required
