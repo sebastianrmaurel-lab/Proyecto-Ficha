@@ -53,7 +53,9 @@
   <div class="fila-acciones" style="margin-top:12px">
     <button class="boton boton-primario" type="submit">Guardar datos personales</button>
     {% if ficha %}
+    {% if tiene_docs_validos %}
     <a class="boton boton-secundario" href="{{ url_for('ficha_pdf', fid=ficha.id) }}" target="_blank">⬇ Descargar PDF</a>
+    {% endif %}
     <button class="boton boton-peligro" type="submit" formaction="{{ url_for('ficha_eliminar', fid=ficha.id) }}" onclick="return confirm('¿Mover a la papelera?')">Mover a la papelera</button>
     {% endif %}
   </div>

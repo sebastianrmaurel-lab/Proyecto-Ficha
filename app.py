@@ -1076,6 +1076,7 @@ def ficha_nueva():
     cats = _cargar_catalogos(db)
     return render_template('ficha.html', ficha=None, documentos={},
                            secciones_config=SECCIONES_CONFIG, cats=cats,
+                           tiene_docs_validos=False,
                            secciones_json=json.dumps({k:v for k,v in SECCIONES_CONFIG.items()}))
 
 def _cargar_catalogos(db):
@@ -1108,8 +1109,17 @@ def ficha_detalle(fid):
         documentos[sec].append(d)
 
     cats = _cargar_catalogos(db)
+
+    tiene_docs_validos = db.execute("""
+        SELECT COUNT(*) FROM documentos_hv
+        WHERE ficha_id=?
+        AND LOWER(TRIM(estado_tramite)) IN ({})
+    """.format(','.join('?'*len(ESTADOS_VALIDOS))),
+    (fid,) + ESTADOS_VALIDOS).fetchone()[0] > 0
+
     return render_template('ficha.html', ficha=ficha, documentos=documentos,
                            secciones_config=SECCIONES_CONFIG, cats=cats,
+                           tiene_docs_validos=tiene_docs_validos,
                            secciones_json=json.dumps({k:{'nombre':v['nombre'],'campos':v['campos']} for k,v in SECCIONES_CONFIG.items()}))
 
 @app.route('/fichas/<int:fid>/actualizar', methods=['POST'])
