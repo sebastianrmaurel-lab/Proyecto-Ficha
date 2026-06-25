@@ -1,61 +1,99 @@
 {% extends "base.html" %}
-
 {% block titulo %}Dashboard{% endblock %}
-
 {% block contenido %}
-  <div class="timbre-modulo">
-    <div>
-      <p class="titulo-principal">Dashboard</p>
-      <p class="subtitulo">Resumen general del sistema de fichas</p>
-    </div>
-  </div>
 
-  <div class="rejilla-kpis">
-    <div class="tarjeta-kpi">
-      <p class="kpi-valor">{{ total_fichas }}</p>
-      <p class="kpi-etiqueta">Fichas activas</p>
-    </div>
-    <div class="tarjeta-kpi">
-      <p class="kpi-valor">{{ total_actos }}</p>
-      <p class="kpi-etiqueta">Actos administrativos</p>
-    </div>
-    <div class="tarjeta-kpi">
-      <p class="kpi-valor">{{ total_familiares }}</p>
-      <p class="kpi-etiqueta">Asignaciones familiares</p>
-    </div>
-    <div class="tarjeta-kpi">
-      <p class="kpi-valor">{{ en_papelera }}</p>
-      <p class="kpi-etiqueta">En la papelera</p>
-      <a class="enlace-kpi" href="{{ url_for('fichas_papelera') }}">Ver papelera →</a>
-    </div>
+<div class="timbre-modulo">
+  <div>
+    <p class="titulo-principal">Dashboard</p>
+    <p class="subtitulo">Solo registros con estado Registrado - Válido</p>
   </div>
+  <div class="acciones-pagina">
+    <a class="boton boton-primario" href="{{ url_for('ficha_nueva') }}">+ Nueva hoja de vida</a>
+  </div>
+</div>
 
-  {% if meses_resumen %}
-    <div class="seccion-ficha" style="margin-top:8px;">
-      <p class="eyebrow">Carpetas creadas por mes</p>
-      <div class="tabla-actos-contenedor" style="max-height:none;">
-        <table class="tabla-actos">
-          <thead>
-            <tr>
-              <th>Glosa</th>
-              {% for mes in meses_resumen %}<th class="numero">{{ mes.label }}</th>{% endfor %}
-              <th class="numero">Total general</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Carpeta Funcionario</td>
-              {% for mes in meses_resumen %}<td class="numero">{{ mes.total }}</td>{% endfor %}
-              <td class="numero">{{ total_general_carpetas }}</td>
-            </tr>
-            <tr class="fila-total">
-              <td>Total general</td>
-              {% for mes in meses_resumen %}<td class="numero">{{ mes.total }}</td>{% endfor %}
-              <td class="numero">{{ total_general_carpetas }}</td>
-            </tr>
-          </tbody>
-        </table>
+{# ── KPIs ── #}
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px">
+  {% for valor, etiqueta, color, href in [
+    (total_fichas,  'Personas registradas',    '#1C3D5A', url_for('fichas_listado')),
+    (docs_validos,  'Documentos válidos',       '#1D6B3A', '#'),
+    (vigentes,      'Designaciones vigentes',   '#7B5E00', '#'),
+    (en_papelera,   'En papelera',              '#9C2B2B', url_for('fichas_papelera')),
+  ] %}
+  <a href="{{ href }}" style="text-decoration:none">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;border-left:4px solid {{ color }}">
+      <p style="font-family:var(--font-display);font-size:2rem;font-weight:700;color:{{ color }};margin:0">{{ valor }}</p>
+      <p style="font-size:.78rem;color:var(--ink-soft);margin:4px 0 0;font-weight:500">{{ etiqueta }}</p>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+
+  {# ── Documentos válidos por sección ── #}
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px">
+    <p class="eyebrow" style="margin-bottom:14px">Documentos válidos por sección</p>
+    {% if por_seccion %}
+      {% set max_total = por_seccion[0].total %}
+      {% for sec in por_seccion %}
+      <div style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span style="font-size:.82rem;font-weight:500">{{ nombres_sec.get(sec.seccion, sec.seccion) }}</span>
+          <span style="font-size:.82rem;font-weight:700;font-family:var(--font-mono)">{{ sec.total }}</span>
+        </div>
+        <div style="background:var(--surface-muted);border-radius:4px;height:6px">
+          <div style="background:var(--primary);border-radius:4px;height:6px;width:{{ (sec.total / max_total * 100)|int }}%"></div>
+        </div>
       </div>
+      {% endfor %}
+    {% else %}
+      <p style="color:var(--ink-soft);font-size:.85rem">Sin documentos válidos aún.</p>
+    {% endif %}
+  </div>
+
+  {# ── Contratos próximos a vencer ── #}
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px">
+    <p class="eyebrow" style="margin-bottom:14px">Designaciones que vencen en 60 días</p>
+    {% if proximos_vencer %}
+    <div style="display:flex;flex-direction:column;gap:8px">
+      {% for p in proximos_vencer %}
+      <a href="{{ url_for('fichas_listado') }}?q={{ p.rut }}" style="text-decoration:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--surface-muted);border-radius:7px;border-left:3px solid var(--accent)">
+          <div>
+            <p style="font-size:.83rem;font-weight:600;margin:0;color:var(--ink)">{{ p.nombre }}</p>
+            <p style="font-size:.72rem;color:var(--ink-soft);margin:2px 0 0;font-family:var(--font-mono)">{{ p.rut }}</p>
+          </div>
+          <span style="font-size:.78rem;font-weight:700;color:var(--accent);font-family:var(--font-mono)">{{ p.vence }}</span>
+        </div>
+      </a>
+      {% endfor %}
     </div>
-  {% endif %}
+    {% else %}
+      <p style="color:var(--ink-soft);font-size:.85rem">Sin designaciones próximas a vencer.</p>
+    {% endif %}
+  </div>
+
+  {# ── Últimas fichas creadas ── #}
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;grid-column:1/-1">
+    <p class="eyebrow" style="margin-bottom:14px">Últimas hojas de vida creadas</p>
+    {% if ultimas_fichas %}
+    <table class="tabla-hv">
+      <thead><tr><th>Nombre</th><th>RUT</th><th>Fecha creación</th></tr></thead>
+      <tbody>
+        {% for f in ultimas_fichas %}
+        <tr>
+          <td>{{ f.nombre }}</td>
+          <td style="font-family:var(--font-mono)">{{ f.rut }}</td>
+          <td style="font-family:var(--font-mono)">{{ f.fecha_creacion[:10] if f.fecha_creacion else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+      <p style="color:var(--ink-soft);font-size:.85rem">Sin fichas registradas aún.</p>
+    {% endif %}
+  </div>
+
+</div>
 {% endblock %}

@@ -53,12 +53,22 @@
   <div class="fila-acciones" style="margin-top:12px">
     <button class="boton boton-primario" type="submit">Guardar datos personales</button>
     {% if ficha %}
+    <a class="boton boton-secundario" href="{{ url_for('ficha_pdf', fid=ficha.id) }}" target="_blank">⬇ Descargar PDF</a>
     <button class="boton boton-peligro" type="submit" formaction="{{ url_for('ficha_eliminar', fid=ficha.id) }}" onclick="return confirm('¿Mover a la papelera?')">Mover a la papelera</button>
     {% endif %}
   </div>
 </form>
 
 {% if ficha %}
+{# ══ BUSCADOR DENTRO DE LA FICHA ══ #}
+<div style="margin-top:24px;display:flex;align-items:center;gap:10px">
+  <input type="text" id="buscador-ficha"
+         placeholder="Buscar en todas las secciones (número, fecha, tipo...)"
+         oninput="filtrarSecciones(this.value)"
+         style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:9px 14px;font-size:.87rem;font-family:var(--font-body)">
+  <span id="buscador-resultado" style="font-size:.78rem;color:var(--ink-soft);white-space:nowrap"></span>
+</div>
+
 {# ══ SECCIONES DINÁMICAS ══ #}
 {% for sec_id, sec_conf in secciones_config.items() %}
 {% set docs = documentos[sec_id] %}
@@ -196,6 +206,36 @@ function _renderCampos(sec_id) {
     div.appendChild(inp);
     cont.appendChild(div);
   });
+}
+
+function filtrarSecciones(texto) {
+  const q = texto.toLowerCase().trim();
+  let totalEncontradas = 0;
+  document.querySelectorAll('details.seccion').forEach(function(det) {
+    const filas = det.querySelectorAll('tbody tr:not(.fila-vacia)');
+    let encontradas = 0;
+    filas.forEach(function(tr) {
+      const contenido = tr.textContent.toLowerCase();
+      const coincide = !q || contenido.includes(q);
+      tr.style.display = coincide ? '' : 'none';
+      if (coincide) encontradas++;
+    });
+    totalEncontradas += encontradas;
+    // abrir la sección si hay resultados, cerrar si no
+    if (q) {
+      det.open = encontradas > 0;
+      const badge = det.querySelector('.badge-num');
+      if (badge) badge.textContent = encontradas;
+    } else {
+      // restaurar badges originales
+      const badge = det.querySelector('.badge-num');
+      if (badge) badge.textContent = filas.length;
+      det.querySelectorAll('tbody tr:not(.fila-vacia)').forEach(function(tr){ tr.style.display=''; });
+    }
+  });
+  const res = document.getElementById('buscador-resultado');
+  if (q) res.textContent = totalEncontradas + ' resultado(s)';
+  else res.textContent = '';
 }
 
 function abrirModal(sec_id) {

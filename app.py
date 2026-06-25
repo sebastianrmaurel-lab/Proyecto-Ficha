@@ -608,28 +608,70 @@ def logout():
 # ─────────────────────────────────────────────
 #  DASHBOARD
 # ─────────────────────────────────────────────
+ESTADOS_VALIDOS = ('registrado - válido', 'registrado - valido', 'válido', 'valido', 'registrado')
+
 @app.route('/dashboard')
 @login_required
 def dashboard():
     db = get_db()
-    total_fichas   = db.execute('SELECT COUNT(*) FROM fichas WHERE activo=1').fetchone()[0]
-    total_docs     = db.execute('SELECT COUNT(*) FROM documentos_hv').fetchone()[0]
-    en_papelera    = db.execute('SELECT COUNT(*) FROM fichas WHERE activo=0').fetchone()[0]
-    por_seccion    = db.execute('''SELECT seccion, COUNT(*) as total FROM documentos_hv
-                                   GROUP BY seccion ORDER BY total DESC LIMIT 5''').fetchall()
-    # fichas por mes
-    meses = []
-    for r in db.execute('''SELECT strftime('%Y-%m', fecha_creacion) AS p, COUNT(*) AS t
-                           FROM fichas WHERE activo=1 GROUP BY p ORDER BY p'''):
-        if r['p']:
-            a,m = r['p'].split('-')
-            mes_es = {'01':'Ene','02':'Feb','03':'Mar','04':'Abr','05':'May','06':'Jun',
-                      '07':'Jul','08':'Ago','09':'Sep','10':'Oct','11':'Nov','12':'Dic'}.get(m,m)
-            meses.append({'label': f'{mes_es} {a}', 'total': r['t']})
 
-    return render_template('dashboard.html', total_fichas=total_fichas, total_docs=total_docs,
-                           en_papelera=en_papelera, por_seccion=por_seccion, meses=meses,
-                           nombres_secciones={k:v['nombre'] for k,v in SECCIONES_CONFIG.items()})
+    total_fichas = db.execute('SELECT COUNT(*) FROM fichas WHERE activo=1').fetchone()[0]
+    en_papelera  = db.execute('SELECT COUNT(*) FROM fichas WHERE activo=0').fetchone()[0]
+
+    # Solo documentos con estado válido/registrado
+    docs_validos = db.execute("""
+        SELECT COUNT(*) FROM documentos_hv
+        WHERE LOWER(TRIM(estado_tramite)) IN ({})
+    """.format(','.join('?'*len(ESTADOS_VALIDOS))), ESTADOS_VALIDOS).fetchone()[0]
+
+    # Documentos válidos por sección (top 8)
+    por_seccion = db.execute("""
+        SELECT seccion, COUNT(*) as total FROM documentos_hv
+        WHERE LOWER(TRIM(estado_tramite)) IN ({})
+        GROUP BY seccion ORDER BY total DESC LIMIT 8
+    """.format(','.join('?'*len(ESTADOS_VALIDOS))), ESTADOS_VALIDOS).fetchall()
+
+    # Designaciones vigentes (fecha_hasta vacía o futura) y válidas
+    from datetime import date
+    hoy = date.today().isoformat()
+    vigentes = db.execute("""
+        SELECT COUNT(*) FROM documentos_hv
+        WHERE seccion='designaciones'
+        AND LOWER(TRIM(estado_tramite)) IN ({})
+        AND (
+            json_extract(datos_extra,'$.fecha_hasta') = ''
+            OR json_extract(datos_extra,'$.fecha_hasta') IS NULL
+            OR json_extract(datos_extra,'$.fecha_hasta') >= ?
+        )
+    """.format(','.join('?'*len(ESTADOS_VALIDOS))), ESTADOS_VALIDOS + (hoy,)).fetchone()[0]
+
+    # Contratos que vencen en los próximos 60 días
+    from datetime import timedelta
+    en_60 = (date.today() + timedelta(days=60)).isoformat()
+    proximos_vencer = db.execute("""
+        SELECT f.nombre, f.rut, json_extract(d.datos_extra,'$.fecha_hasta') as vence,
+               d.servicio_documento, json_extract(d.datos_extra,'$.calidad') as calidad
+        FROM documentos_hv d
+        JOIN fichas f ON f.id = d.ficha_id
+        WHERE d.seccion = 'designaciones'
+        AND LOWER(TRIM(d.estado_tramite)) IN ({})
+        AND json_extract(d.datos_extra,'$.fecha_hasta') BETWEEN ? AND ?
+        ORDER BY vence ASC LIMIT 10
+    """.format(','.join('?'*len(ESTADOS_VALIDOS))), ESTADOS_VALIDOS + (hoy, en_60)).fetchall()
+
+    # Últimas 5 fichas creadas
+    ultimas_fichas = db.execute("""
+        SELECT nombre, rut, fecha_creacion FROM fichas
+        WHERE activo=1 ORDER BY fecha_creacion DESC LIMIT 5
+    """).fetchall()
+
+    nombres_sec = {k: v['nombre'] for k, v in SECCIONES_CONFIG.items()}
+
+    return render_template('dashboard.html',
+        total_fichas=total_fichas, en_papelera=en_papelera,
+        docs_validos=docs_validos, vigentes=vigentes,
+        por_seccion=por_seccion, proximos_vencer=proximos_vencer,
+        ultimas_fichas=ultimas_fichas, nombres_sec=nombres_sec)
 
 # ─────────────────────────────────────────────
 #  LISTADO
@@ -656,6 +698,190 @@ def fichas_listado():
     fichas = db.execute(sql, params).fetchall()
     en_papelera = db.execute('SELECT COUNT(*) FROM fichas WHERE activo=0').fetchone()[0]
     return render_template('listado.html', fichas=fichas, q=q, en_papelera=en_papelera)
+
+@app.route('/fichas/<int:fid>/pdf')
+@login_required
+def ficha_pdf(fid):
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib import colors
+    from reportlab.lib.units import cm
+    from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table,
+                                    TableStyle, HRFlowable)
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
+
+    db = get_db()
+    ficha = db.execute('SELECT * FROM fichas WHERE id=?', (fid,)).fetchone()
+    if not ficha:
+        flash('Ficha no encontrada.', 'error')
+        return redirect(url_for('fichas_listado'))
+
+    # Solo documentos con estado válido
+    documentos = {}
+    for sec_id in SECCIONES_CONFIG:
+        docs = db.execute("""
+            SELECT * FROM documentos_hv
+            WHERE ficha_id=? AND seccion=?
+            AND LOWER(TRIM(estado_tramite)) IN ({})
+            ORDER BY fecha_documento DESC
+        """.format(','.join('?'*len(ESTADOS_VALIDOS))),
+        (fid, sec_id) + ESTADOS_VALIDOS).fetchall()
+        if docs:
+            documentos[sec_id] = [dict(d) for d in docs]
+            for d in documentos[sec_id]:
+                try:
+                    d['extra'] = json.loads(d['datos_extra'] or '{}')
+                except Exception:
+                    d['extra'] = {}
+
+    buf = BytesIO()
+    pdf_doc = SimpleDocTemplate(buf, pagesize=letter,
+                            leftMargin=2*cm, rightMargin=2*cm,
+                            topMargin=2*cm, bottomMargin=2*cm)
+
+    COLOR_PRIMARIO = colors.HexColor('#1C3D5A')
+    COLOR_GRIS     = colors.HexColor('#F5F7FA')
+    COLOR_BORDE    = colors.HexColor('#DDE1E7')
+    COLOR_ACENTO   = colors.HexColor('#9C2B2B')
+
+    estilos = getSampleStyleSheet()
+    est_titulo = ParagraphStyle('titulo', parent=estilos['Normal'],
+                                fontSize=15, fontName='Helvetica-Bold',
+                                textColor=colors.white, alignment=TA_CENTER)
+    est_sub    = ParagraphStyle('sub', parent=estilos['Normal'],
+                                fontSize=8, fontName='Helvetica',
+                                textColor=colors.HexColor('#BFD4E8'), alignment=TA_CENTER)
+    est_etq    = ParagraphStyle('etq', parent=estilos['Normal'],
+                                fontSize=8, fontName='Helvetica-Bold',
+                                textColor=colors.HexColor('#5B6470'), alignment=TA_RIGHT)
+    est_val    = ParagraphStyle('val', parent=estilos['Normal'],
+                                fontSize=9, fontName='Helvetica',
+                                textColor=colors.HexColor('#161A1F'))
+    est_seccion= ParagraphStyle('sec', parent=estilos['Normal'],
+                                fontSize=8, fontName='Helvetica-Bold',
+                                textColor=COLOR_PRIMARIO, spaceAfter=4)
+    est_tabla_enc = ParagraphStyle('tenc', parent=estilos['Normal'],
+                                   fontSize=7, fontName='Helvetica-Bold',
+                                   textColor=colors.HexColor('#5B6470'))
+    est_tabla_cel = ParagraphStyle('tcel', parent=estilos['Normal'],
+                                   fontSize=7.5, fontName='Helvetica',
+                                   textColor=colors.HexColor('#161A1F'))
+
+    story = []
+
+    # ── Encabezado ──
+    enc_data = [[Paragraph(ficha['nombre'] or '', est_titulo)],
+                [Paragraph('Hoja de Vida de Personal', est_sub)]]
+    enc_table = Table(enc_data, colWidths=[17*cm])
+    enc_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), COLOR_PRIMARIO),
+        ('ROWPADDING', (0,0), (-1,-1), 8),
+        ('TOPPADDING', (0,0), (-1,0), 14),
+        ('BOTTOMPADDING', (0,-1), (-1,-1), 14),
+        ('ROUNDEDCORNERS', [6,6,0,0]),
+    ]))
+    story.append(enc_table)
+    story.append(Spacer(1, 0.3*cm))
+
+    # ── Datos personales ──
+    def campo(etq, val):
+        return [Paragraph(etq, est_etq), Paragraph(str(val or '—'), est_val)]
+
+    dp_data = [
+        campo('Run (RUT)',           ficha['rut']),
+        campo('ROL',                 ficha['rol']),
+        campo('Pasaporte',           ficha['pasaporte']),
+        campo('País Nacionalidad',   ficha['pais_nacionalidad']),
+        campo('Nombre Completo',     ficha['nombre']),
+        campo('Correo',              ficha['correo']),
+        campo('Región',              ficha['region']),
+        campo('Comuna',              ficha['comuna']),
+        campo('Ciudad',              ficha['ciudad']),
+        campo('Fecha Nacimiento',    ficha['fecha_nacimiento']),
+        campo('Estado Civil',        ficha['estado_civil']),
+        campo('Jerarquía',           ficha['jerarquia']),
+        campo('Grado Académico',     ficha['grado_academico']),
+        campo('Título',              ficha['titulo']),
+        campo('Teléfono',            ficha['telefono']),
+        campo('Dirección',           ficha['direccion']),
+    ]
+    if ficha['observaciones']:
+        dp_data.append(campo('Observaciones', ficha['observaciones']))
+
+    dp_table = Table(dp_data, colWidths=[4.5*cm, 12.5*cm])
+    dp_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), COLOR_GRIS),
+        ('BOX', (0,0), (-1,-1), 0.5, COLOR_BORDE),
+        ('INNERGRID', (0,0), (-1,-1), 0.3, COLOR_BORDE),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('TOPPADDING', (0,0), (-1,-1), 4),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+        ('LEFTPADDING', (0,0), (0,-1), 6),
+        ('RIGHTPADDING', (0,0), (0,-1), 6),
+    ]))
+    story.append(dp_table)
+
+    # ── Secciones con documentos válidos ──
+    for sec_id, sec_conf in SECCIONES_CONFIG.items():
+        docs = documentos.get(sec_id)
+        if not docs:
+            continue
+
+        story.append(Spacer(1, 0.5*cm))
+        story.append(HRFlowable(width='100%', thickness=0.5, color=COLOR_BORDE))
+        story.append(Spacer(1, 0.2*cm))
+        story.append(Paragraph(sec_conf['nombre'].upper(), est_seccion))
+
+        # Construir columnas de la tabla
+        cols_sec = sec_conf['columnas']
+        enc_fila = [Paragraph(h, est_tabla_enc) for h, _ in cols_sec]
+
+        filas_tabla = [enc_fila]
+        for doc in docs:
+            fila = []
+            for _, clave in cols_sec:
+                if clave in ('tipo_documento','numero_documento','fecha_documento',
+                             'servicio_documento','estado_tramite'):
+                    fila.append(Paragraph(str(doc.get(clave,'') or ''), est_tabla_cel))
+                else:
+                    fila.append(Paragraph(str(doc['extra'].get(clave,'') or ''), est_tabla_cel))
+            filas_tabla.append(fila)
+
+        n_cols = len(cols_sec)
+        ancho_col = 17*cm / n_cols
+        t = Table(filas_tabla, colWidths=[ancho_col]*n_cols, repeatRows=1)
+        t.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), COLOR_PRIMARIO),
+            ('TEXTCOLOR',  (0,0), (-1,0), colors.white),
+            ('BACKGROUND', (0,1), (-1,-1), colors.white),
+            ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, COLOR_GRIS]),
+            ('BOX', (0,0), (-1,-1), 0.5, COLOR_BORDE),
+            ('INNERGRID', (0,0), (-1,-1), 0.3, COLOR_BORDE),
+            ('TOPPADDING', (0,0), (-1,-1), 4),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+            ('LEFTPADDING', (0,0), (-1,-1), 4),
+            ('RIGHTPADDING', (0,0), (-1,-1), 4),
+            ('VALIGN', (0,0), (-1,-1), 'TOP'),
+            ('FONTSIZE', (0,0), (-1,-1), 7),
+            ('WORDWRAP', (0,0), (-1,-1), True),
+        ]))
+        story.append(t)
+
+    # ── Pie de página ──
+    story.append(Spacer(1, 0.8*cm))
+    from datetime import date as dt
+    pie = Paragraph(
+        f'Documento generado el {dt.today().strftime("%d/%m/%Y")} — Solo incluye documentos con estado Registrado - Válido',
+        ParagraphStyle('pie', parent=estilos['Normal'], fontSize=7,
+                       textColor=colors.HexColor('#9B9B9B'), alignment=TA_CENTER))
+    story.append(pie)
+
+    pdf_doc.build(story)
+    buf.seek(0)
+    nombre_archivo = f"hoja_vida_{(ficha['nombre'] or 'persona').replace(' ','_')}.pdf"
+    return send_file(buf, as_attachment=True, download_name=nombre_archivo,
+                     mimetype='application/pdf')
+
 
 @app.route('/fichas/exportar-fichas')
 @login_required
